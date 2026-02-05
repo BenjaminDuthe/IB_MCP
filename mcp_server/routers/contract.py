@@ -236,7 +236,7 @@ async def get_contract_rules(body: ContractRulesRequest = Body(...)):
         try:
             response = await client.post(
                 f"{BASE_URL}/iserver/contract/rules",
-                json=body.dict(),
+                json=body.model_dump(),
                 timeout=10
             )
             response.raise_for_status()

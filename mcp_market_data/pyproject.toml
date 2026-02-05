@@ -1,0 +1,16 @@
+[project]
+name = "mcp-market-data"
+version = "0.1.0"
+description = "MCP server for market data via yfinance"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp==2.10.3",
+    "fastapi==0.116.0",
+    "uvicorn==0.35.0",
+    "yfinance>=0.2.40",
+    "pandas>=2.2.0",
+    "pydantic>=2.11,<2.12",
+]
+
+[dependency-groups]
+dev = []

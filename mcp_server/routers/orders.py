@@ -62,7 +62,7 @@ async def place_order(
         try:
             response = await client.post(
                 f"{BASE_URL}/iserver/account/{accountId}/orders",
-                json=body.dict(exclude_none=True),
+                json=body.model_dump(exclude_none=True),
                 timeout=10
             )
             response.raise_for_status()
@@ -90,7 +90,7 @@ async def preview_order(
         try:
             response = await client.post(
                 f"{BASE_URL}/iserver/account/{accountId}/orders/whatif",
-                json=body.dict(exclude_none=True),
+                json=body.model_dump(exclude_none=True),
                 timeout=10
             )
             response.raise_for_status()
@@ -119,7 +119,7 @@ async def modify_order(
         try:
             response = await client.post(
                 f"{BASE_URL}/iserver/account/{accountId}/order/{orderId}",
-                json=body.dict(exclude_none=True),
+                json=body.model_dump(exclude_none=True),
                 timeout=10
             )
             response.raise_for_status()
@@ -174,7 +174,7 @@ async def place_order_reply(
         try:
             response = await client.post(
                 f"{BASE_URL}/iserver/reply/{replyId}",
-                json=body.dict(),
+                json=body.model_dump(),
                 timeout=10
             )
             response.raise_for_status()

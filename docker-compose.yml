@@ -7,27 +7,27 @@ services:
     image: ib_mcp_api_gateway:v0.1
     ports:
       - "${GATEWAY_PORT}:${GATEWAY_PORT}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
-    environment:
-      - XX:XX
-      # - GATEWAY_INTERNAL_BASE_URL=${GATEWAY_INTERNAL_BASE_URL}
-      # - GATEWAY_PORT=${GATEWAY_PORT}
-      # - GATEWAY_ENDPOINT=${GATEWAY_ENDPOINT}
-      # - GATEWAY_TEST_ENDPOINT=${GATEWAY_TEST_ENDPOINT}
+    # environment:
+    #   - GATEWAY_INTERNAL_BASE_URL=${GATEWAY_INTERNAL_BASE_URL}
+    #   - GATEWAY_PORT=${GATEWAY_PORT}
+    #   - GATEWAY_ENDPOINT=${GATEWAY_ENDPOINT}
+    #   - GATEWAY_TEST_ENDPOINT=${GATEWAY_TEST_ENDPOINT}
     networks:
       - mcp_net
     volumes:
       - ./api_gateway/conf.yaml:/app/api_gateway/root/conf.yaml # Mount the config file
     healthcheck:
-      # Dedicated healthcheck script for cleaner logic and better environment variable handling.
-      # The script is copied into the container image via the Dockerfile.
-      test: [ "CMD-SHELL", "/usr/local/bin/healthcheck.sh" ]
+      # Check gateway responds (any HTTP status = healthy). 401 just means no IB session.
+      test: ["CMD-SHELL", "curl -sk https://localhost:5055/v1/api/iserver/auth/status -o /dev/null"]
       interval: 20s
       timeout: 5s
       retries: 5
       start_period: 20s
-  
+
   mcp_server:
     container_name: mcp_server
     build:
@@ -36,6 +36,8 @@ services:
     image: ib_mcp_mcp_server:v0.0
     ports:
       - "${MCP_SERVER_PORT}:${MCP_SERVER_PORT}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     environment:
@@ -60,7 +62,109 @@ services:
     tty: true
     restart: unless-stopped
 
+  mcp_market_data:
+    container_name: mcp_market_data
+    build:
+      context: ./mcp_market_data
+      dockerfile: Dockerfile
+    image: ib_mcp_market_data:v0.1
+    ports:
+      - "${MCP_MARKET_DATA_PORT}:${MCP_MARKET_DATA_PORT}"
+    env_file:
+      - .env
+    environment:
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=${MCP_MARKET_DATA_PORT}
+    networks:
+      - mcp_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${MCP_MARKET_DATA_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  mcp_sentiment:
+    container_name: mcp_sentiment
+    build:
+      context: ./mcp_sentiment
+      dockerfile: Dockerfile
+    image: ib_mcp_sentiment:v0.1
+    ports:
+      - "${MCP_SENTIMENT_PORT}:${MCP_SENTIMENT_PORT}"
+    env_file:
+      - .env
+    environment:
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=${MCP_SENTIMENT_PORT}
+      - MCP_SENTIMENT_INTERNAL_URL=http://mcp_sentiment:${MCP_SENTIMENT_PORT}
+    networks:
+      - mcp_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${MCP_SENTIMENT_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  mcp_news:
+    container_name: mcp_news
+    build:
+      context: ./mcp_news
+      dockerfile: Dockerfile
+    image: ib_mcp_news:v0.1
+    ports:
+      - "${MCP_NEWS_PORT}:${MCP_NEWS_PORT}"
+    env_file:
+      - .env
+    environment:
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=${MCP_NEWS_PORT}
+    networks:
+      - mcp_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${MCP_NEWS_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  telegram_bot:
+    container_name: telegram_bot
+    build:
+      context: ./telegram_bot
+      dockerfile: Dockerfile
+    image: ib_mcp_telegram_bot:v0.1
+    ports:
+      - "${TELEGRAM_BOT_PORT}:${TELEGRAM_BOT_PORT}"
+    env_file:
+      - .env
+    environment:
+      - MCP_IB_URL=http://mcp_server:${MCP_SERVER_PORT}/mcp/
+      - MCP_MARKET_DATA_URL=http://mcp_market_data:${MCP_MARKET_DATA_PORT}/mcp/mcp/
+      - MCP_SENTIMENT_URL=http://mcp_sentiment:${MCP_SENTIMENT_PORT}/mcp/mcp/
+      - MCP_NEWS_URL=http://mcp_news:${MCP_NEWS_PORT}/mcp/mcp/
+      - DB_PATH=/data/trading.db
+    depends_on:
+      mcp_market_data:
+        condition: service_healthy
+      mcp_sentiment:
+        condition: service_healthy
+      mcp_news:
+        condition: service_healthy
+    networks:
+      - mcp_net
+    volumes:
+      - trading_data:/data
+      - ./shared:/app/shared:ro
+    restart: unless-stopped
+
 networks:
   mcp_net:
     driver: bridge
 
+volumes:
+  trading_data:

@@ -87,7 +87,7 @@ async def configure_fyi_delivery_options(body: DeliveryOptionsRequest = Body(...
     """
     async with httpx.AsyncClient(verify=False) as client:
         try:
-            response = await client.post(f"{BASE_URL}/fyi/deliveryoptions", json=body.dict(), timeout=10)
+            response = await client.post(f"{BASE_URL}/fyi/deliveryoptions", json=body.model_dump(), timeout=10)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as exc:
@@ -108,7 +108,7 @@ async def configure_device_delivery_options(body: DeviceDeliveryOptionsRequest =
     """
     async with httpx.AsyncClient(verify=False) as client:
         try:
-            response = await client.put(f"{BASE_URL}/fyi/deliveryoptions/device", json=body.dict(), timeout=10)
+            response = await client.put(f"{BASE_URL}/fyi/deliveryoptions/device", json=body.model_dump(), timeout=10)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as exc:
@@ -129,7 +129,7 @@ async def get_fyi_settings(body: FYISettingsGetRequest = Body(...)):
     """
     async with httpx.AsyncClient(verify=False) as client:
         try:
-            response = await client.post(f"{BASE_URL}/fyi/settings", json=body.dict(), timeout=10)
+            response = await client.post(f"{BASE_URL}/fyi/settings", json=body.model_dump(), timeout=10)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as exc:
@@ -153,7 +153,7 @@ async def configure_fyi_setting(
     """
     async with httpx.AsyncClient(verify=False) as client:
         try:
-            response = await client.put(f"{BASE_URL}/fyi/settings/{typecode}", json=body.dict(), timeout=10)
+            response = await client.put(f"{BASE_URL}/fyi/settings/{typecode}", json=body.model_dump(), timeout=10)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as exc:
@@ -176,7 +176,7 @@ async def mark_notifications_as_read(body: MarkReadRequest = Body(...)):
     async with httpx.AsyncClient(verify=False) as client:
         try:
             # Using request to handle DELETE with body, as httpx.delete doesn't directly support it.
-            request = client.build_request("DELETE", f"{BASE_URL}/fyi/notifications", json=body.dict())
+            request = client.build_request("DELETE", f"{BASE_URL}/fyi/notifications", json=body.model_dump())
             response = await client.send(request, timeout=10)
             response.raise_for_status()
             return response.json()

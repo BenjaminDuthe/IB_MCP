@@ -41,6 +41,11 @@ app.include_router(session.router)
 app.include_router(watchlists.router)
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "mcp-server-ib"}
+
+
 route_maps_list = []
 
 if EXCLUDED_TAGS_SET:    
@@ -58,5 +63,5 @@ if __name__ == "__main__":
         transport=MCP_TRANSPORT_PROTOCOL,
         host=MCP_SERVER_HOST,
         port=MCP_SERVER_PORT,
-        log_level="DEBUG",
+        log_level=os.environ.get("LOG_LEVEL", "INFO"),
     )

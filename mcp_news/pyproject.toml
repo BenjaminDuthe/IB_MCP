@@ -1,0 +1,17 @@
+[project]
+name = "mcp-news"
+version = "0.1.0"
+description = "MCP server for financial news (Finnhub + RSS)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp==2.10.3",
+    "fastapi==0.116.0",
+    "uvicorn==0.35.0",
+    "finnhub-python>=2.4.20",
+    "feedparser>=6.0.0",
+    "httpx>=0.28.0",
+    "pydantic>=2.11,<2.12",
+]
+
+[dependency-groups]
+dev = []

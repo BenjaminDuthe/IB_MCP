@@ -1,0 +1,17 @@
+[project]
+name = "mcp-sentiment"
+version = "0.1.0"
+description = "MCP server for social sentiment analysis (Reddit + StockTwits)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp==2.10.3",
+    "fastapi==0.116.0",
+    "uvicorn==0.35.0",
+    "praw>=7.7.0",
+    "httpx>=0.28.0",
+    "textblob>=0.18.0",
+    "pydantic>=2.11,<2.12",
+]
+
+[dependency-groups]
+dev = []

@@ -234,7 +234,7 @@ async def get_hmds_history(
 async def unsubscribe_market_data(body: UnsubscribeRequest = Body(...)):
     async with httpx.AsyncClient(verify=False) as client:
         try:
-            response = await client.post(f"{BASE_URL}/iserver/marketdata/unsubscribe", json=body.dict(), timeout=10)
+            response = await client.post(f"{BASE_URL}/iserver/marketdata/unsubscribe", json=body.model_dump(), timeout=10)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as exc:

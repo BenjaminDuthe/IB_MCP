@@ -17,9 +17,6 @@ COPY pyproject.toml ./
 # Copy the entire mcp_server directory
 COPY . /app/mcp_server
 
-# Debug: List files to verify server.py is copied
-RUN ls -la /app/mcp_server/
-
 # Set PYTHONPATH to include the /app directory
 ENV PYTHONPATH=/app
 

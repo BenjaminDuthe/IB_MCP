@@ -162,7 +162,7 @@ async def get_all_accounts_allocation(body: AccountAllocationRequest = Body(...)
         try:
             response = await client.post(
                 f"{BASE_URL}/portfolio/allocation",
-                json=body.dict(),
+                json=body.model_dump(),
                 timeout=20
             )
             response.raise_for_status()

@@ -50,7 +50,7 @@ class HmdsScannerRequest(BaseModel):
     secType: str = Field(..., description="The security type, e.g., 'STK'.")
     filters: Any = Field(None, description="An object containing scanner filters.")
 
-    class ConfigDict:
+    model_config = ConfigDict(
         json_schema_extra = {
             "example": {
                 "instrument": "STK",
@@ -63,6 +63,7 @@ class HmdsScannerRequest(BaseModel):
                 ]
             }
         }
+    )
 
 
 # --- Scanner Router Endpoints ---
@@ -149,7 +150,7 @@ async def run_hmds_scanner(body: HmdsScannerRequest = Body(...)):
             # Now, make the actual scanner request
             scanner_response = await client.post(
                 f"{BASE_URL}/hmds/scanner",
-                json=body.dict(),
+                json=body.model_dump(),
                 timeout=30
             )
             scanner_response.raise_for_status()

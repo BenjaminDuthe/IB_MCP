@@ -288,9 +288,34 @@ This Docker container sets up and runs the **Interactive Brokers (IB) Model Cont
 
 This setup provides a containerized environment for the MCP server with integrated routers, enabling it to communicate with the IB Client Portal Gateway via the Model Context Protocol.
 
+## MCP Server Implementation Patterns
+
+This project uses two different patterns for MCP server implementation:
+
+### Pattern 1: Legacy mcp.run() (mcp_server - IB API)
+- **Endpoint**: `/mcp/` (single level)
+- **Note**: When using `mcp.run()`, FastMCP creates its own Starlette app, so `/health` and other FastAPI routes are lost
+- **Used by**: `mcp_server` (Interactive Brokers API wrapper)
+
+### Pattern 2: Modern app.mount() (market_data, sentiment, news)
+- **Endpoint**: `/mcp/mcp/` (double level due to mount path + internal path)
+- **Preserves**: `/health` and all other FastAPI routes
+- **Implementation**: Uses `mcp_app = mcp.streamable_http_app()` + `app.mount("/mcp", mcp_app)`
+- **Recommended** for new services
+
+## Known Issues & Dependencies
+
+### FastMCP & Pydantic Compatibility
+- `fastmcp==2.10.3` requires `pydantic>=2.11,<2.12`
+- Do not upgrade pydantic beyond 2.11.x without testing FastMCP compatibility
+- See `pyproject.toml` for pinned versions
+
+### zsh Shell Notes
+- When using `curl` with URLs containing `?`, wrap the URL in single quotes: `curl 'http://localhost:5002/endpoint?param=value'`
+
 ## Limitations
 
-- **Claude Desktop:** The current development only supports streamable HTTP and claude desktop Remote MCP server support is currently in beta and available for users on Claude Pro, Max, Team, and Enterprise plans (as of June 2025).
+- **Claude Desktop:** The current development only supports streamable HTTP and claude desktop Remote MCP server support is currently in beta and available for users on Claude Pro, Max, Team, and Enterprise plans (as of February 2026).
 - **Cline:** Cline still has issues with streamable HTTP with remote servers.
 
 ## References

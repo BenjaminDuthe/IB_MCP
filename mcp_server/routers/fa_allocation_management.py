@@ -76,7 +76,7 @@ async def create_fa_group(body: FAGroup = Body(...)):
             # For a single group creation, sending the single object's dict is correct.
             response = await client.post(
                 f"{BASE_URL}/fa/groups",
-                json=[body.dict()], # The doc example suggests sending a list containing one group object
+                json=[body.model_dump()], # The doc example suggests sending a list containing one group object
                 timeout=10
             )
             response.raise_for_status()

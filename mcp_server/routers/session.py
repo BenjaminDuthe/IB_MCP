@@ -68,6 +68,29 @@ async def reauthenticate():
             return {"error": "Request Error", "detail": str(exc)}
 
 @router.post(
+    "/iserver/auth/ssodh/init",
+    tags=["Session"],
+    summary="Initialize Brokerage Session",
+    description="Re-initializes a brokerage session without browser login. "
+                "Use when auth/status returns connected=true, authenticated=false."
+)
+async def ssodh_init():
+    """
+    Re-initializes the brokerage session via SSO/DH.
+    This can recover a session where the gateway is connected but not authenticated.
+    """
+    async with httpx.AsyncClient(verify=False) as client:
+        try:
+            response = await client.post(f"{BASE_URL}/iserver/auth/ssodh/init", timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as exc:
+            return {"error": "IBKR API Error", "status_code": exc.response.status_code, "detail": exc.response.text}
+        except httpx.RequestError as exc:
+            return {"error": "Request Error", "detail": str(exc)}
+
+
+@router.post(
     "/logout",
     tags=["Session"],
     summary="Terminate Session",

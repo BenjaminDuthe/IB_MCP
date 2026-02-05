@@ -16,6 +16,7 @@ dependencies = [
     "mcp==1.10.1",
     "asyncio==3.4.3",
     "aiohttp==3.12.13",
+    "pydantic>=2.11,<2.12",
 ]
 
 [dependency-groups]
