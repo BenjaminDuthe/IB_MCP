@@ -182,3 +182,6 @@ openapi.json
 
 #
 .docs/
+
+# Load test reports (generated output)
+reports/
