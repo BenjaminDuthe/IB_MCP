@@ -11,17 +11,18 @@ services:
       - "host.docker.internal:host-gateway"
     env_file:
       - .env
-    # environment:
-    #   - GATEWAY_INTERNAL_BASE_URL=${GATEWAY_INTERNAL_BASE_URL}
-    #   - GATEWAY_PORT=${GATEWAY_PORT}
-    #   - GATEWAY_ENDPOINT=${GATEWAY_ENDPOINT}
-    #   - GATEWAY_TEST_ENDPOINT=${GATEWAY_TEST_ENDPOINT}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
     networks:
       - mcp_net
     volumes:
-      - ./api_gateway/conf.yaml:/app/api_gateway/root/conf.yaml # Mount the config file
+      - ./api_gateway/conf.yaml:/app/api_gateway/root/conf.yaml
     healthcheck:
-      # Check gateway responds (any HTTP status = healthy). 401 just means no IB session.
       test: ["CMD-SHELL", "curl -sk https://localhost:5055/v1/api/iserver/auth/status -o /dev/null"]
       interval: 20s
       timeout: 5s
@@ -42,21 +43,19 @@ services:
       - .env
     environment:
       - ROUTERS_PATH=/app/mcp_server/routers
-      # GATEWAY_BASE_URL: ${GATEWAY_INTERNAL_BASE_URL}
-      # GATEWAY_PORT: ${GATEWAY_PORT}
-      # GATEWAY_ENDPOINT: ${GATEWAY_ENDPOINT}
-      # MCP_SERVER_HOST: ${MCP_SERVER_HOST}
-      # MCP_SERVER_PORT: ${MCP_SERVER_PORT}
-      # MCP_TRANSPORT_PROTOCOL: ${MCP_TRANSPORT_PROTOCOL}
-      # MCP_SERVER_BASE_URL: ${MCP_SERVER_INTERNAL_BASE_URL}
-      # MCP_SERVER_LOG_LEVEL: ${MCP_SERVER_LOG_LEVEL}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.3'
+        reservations:
+          memory: 128M
     depends_on:
       api_gateway:
         condition: service_healthy
     networks:
       - mcp_net
     volumes:
-      # Mount local directory for development
       - ./mcp_server:/app/mcp_server
     stdin_open: true
     tty: true
@@ -75,6 +74,13 @@ services:
     environment:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=${MCP_MARKET_DATA_PORT}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
     networks:
       - mcp_net
     healthcheck:
@@ -99,6 +105,13 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=${MCP_SENTIMENT_PORT}
       - MCP_SENTIMENT_INTERNAL_URL=http://mcp_sentiment:${MCP_SENTIMENT_PORT}
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: '0.5'
+        reservations:
+          memory: 192M
     networks:
       - mcp_net
     healthcheck:
@@ -122,6 +135,13 @@ services:
     environment:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=${MCP_NEWS_PORT}
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: '0.5'
+        reservations:
+          memory: 192M
     networks:
       - mcp_net
     healthcheck:
@@ -148,6 +168,13 @@ services:
       - MCP_SENTIMENT_URL=http://mcp_sentiment:${MCP_SENTIMENT_PORT}/mcp/mcp/
       - MCP_NEWS_URL=http://mcp_news:${MCP_NEWS_PORT}/mcp/mcp/
       - DB_PATH=/data/trading.db
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: '0.5'
+        reservations:
+          memory: 192M
     depends_on:
       mcp_market_data:
         condition: service_healthy

@@ -1,36 +1,34 @@
+import asyncio
 import os
 import httpx
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/sentiment", tags=["Combined Sentiment"])
 
+# Shared httpx client (connection pooling)
+_client = httpx.AsyncClient(timeout=30.0)
+
 
 @router.get("/combined/{ticker}")
 async def get_combined_sentiment(ticker: str):
     """Aggregate sentiment from Reddit and StockTwits into a unified score."""
     base_url = os.environ.get("MCP_SENTIMENT_INTERNAL_URL", "http://mcp_sentiment:5004")
-    results = {}
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        # Fetch Reddit sentiment
+    async def _fetch(source: str, url: str) -> tuple[str, dict]:
         try:
-            resp = await client.get(f"{base_url}/sentiment/reddit/{ticker}")
+            resp = await _client.get(url)
             if resp.status_code == 200:
-                results["reddit"] = resp.json()
-            else:
-                results["reddit"] = {"error": f"HTTP {resp.status_code}", "detail": resp.text}
+                return source, resp.json()
+            return source, {"error": f"HTTP {resp.status_code}", "detail": resp.text}
         except Exception as e:
-            results["reddit"] = {"error": str(e)}
+            return source, {"error": str(e)}
 
-        # Fetch StockTwits sentiment
-        try:
-            resp = await client.get(f"{base_url}/sentiment/stocktwits/{ticker}")
-            if resp.status_code == 200:
-                results["stocktwits"] = resp.json()
-            else:
-                results["stocktwits"] = {"error": f"HTTP {resp.status_code}", "detail": resp.text}
-        except Exception as e:
-            results["stocktwits"] = {"error": str(e)}
+    # Fetch Reddit + StockTwits in parallel
+    fetches = await asyncio.gather(
+        _fetch("reddit", f"{base_url}/sentiment/reddit/{ticker}"),
+        _fetch("stocktwits", f"{base_url}/sentiment/stocktwits/{ticker}"),
+    )
+    results = dict(fetches)
 
     # Calculate unified score
     scores = []

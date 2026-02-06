@@ -1,4 +1,6 @@
+import asyncio
 import os
+from concurrent.futures import ThreadPoolExecutor
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -20,10 +22,18 @@ mcp = FastMCP.from_fastapi(app=_tool_app)
 mcp_app = mcp.streamable_http_app()
 
 
+_executor = ThreadPoolExecutor(
+    max_workers=int(os.environ.get("THREAD_POOL_SIZE", "100"))
+)
+
+
 @asynccontextmanager
 async def lifespan(app):
+    loop = asyncio.get_running_loop()
+    loop.set_default_executor(_executor)
     async with mcp_app.lifespan(app):
         yield
+    _executor.shutdown(wait=False)
 
 
 app = FastAPI(
@@ -41,7 +51,11 @@ app.include_router(overview_router)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "mcp-market-data"}
+    pool_info = {
+        "threads_active": _executor._work_queue.qsize(),
+        "max_workers": _executor._max_workers,
+    }
+    return {"status": "ok", "service": "mcp-market-data", "thread_pool": pool_info}
 
 
 app.mount("/mcp", mcp_app)
@@ -49,4 +63,8 @@ app.mount("/mcp", mcp_app)
 if __name__ == "__main__":
     host = os.environ.get("MCP_HOST", "0.0.0.0")
     port = int(os.environ.get("MCP_PORT", "5003"))
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    workers = int(os.environ.get("MCP_WORKERS", "1"))
+    if workers > 1:
+        uvicorn.run("mcp_market_data.server:app", host=host, port=port, workers=workers, log_level="info")
+    else:
+        uvicorn.run(app, host=host, port=port, log_level="info")

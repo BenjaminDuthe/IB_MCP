@@ -1,7 +1,14 @@
+import asyncio
 from fastapi import APIRouter, HTTPException, Query
-import yfinance as yf
+
+from mcp_market_data.tools._ticker_pool import get_ticker
 
 router = APIRouter(prefix="/stock", tags=["History"])
+
+
+def _fetch_history(ticker: str, period: str, interval: str):
+    """Fetch ticker history synchronously (for use with to_thread)."""
+    return get_ticker(ticker).history(period=period, interval=interval)
 
 
 @router.get("/history/{ticker}")
@@ -12,8 +19,7 @@ async def get_history(
 ):
     """Get OHLCV historical data for a ticker with configurable period and interval."""
     try:
-        t = yf.Ticker(ticker.upper())
-        hist = t.history(period=period, interval=interval)
+        hist = await asyncio.to_thread(_fetch_history, ticker.upper(), period, interval)
 
         if hist.empty:
             raise HTTPException(status_code=404, detail=f"No history for {ticker}")

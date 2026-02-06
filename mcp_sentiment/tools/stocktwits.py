@@ -1,22 +1,46 @@
+import time
 import httpx
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/sentiment", tags=["StockTwits Sentiment"])
 
 STOCKTWITS_BASE = "https://api.stocktwits.com/api/2"
+DEFAULT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; IB_MCP/1.0)",
+    "Accept": "application/json",
+}
+
+# Shared httpx client (connection pooling)
+_client = httpx.AsyncClient(headers=DEFAULT_HEADERS, timeout=15.0)
+
+# Circuit breaker: avoid hammering a blocked API
+_circuit = {"open": False, "last_check": 0.0, "cooldown": 300}  # 5 min cooldown
 
 
 @router.get("/stocktwits/{ticker}")
 async def get_stocktwits_sentiment(ticker: str):
     """Get StockTwits sentiment for a ticker: bullish/bearish ratio, message volume."""
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(f"{STOCKTWITS_BASE}/streams/symbol/{ticker.upper()}.json")
+    # Circuit breaker: if API was recently blocked, fail fast
+    if _circuit["open"] and (time.time() - _circuit["last_check"]) < _circuit["cooldown"]:
+        raise HTTPException(
+            status_code=503,
+            detail=f"StockTwits API unavailable (Cloudflare protection). Retry in {int(_circuit['cooldown'] - (time.time() - _circuit['last_check']))}s"
+        )
 
+    try:
+        resp = await _client.get(f"{STOCKTWITS_BASE}/streams/symbol/{ticker.upper()}.json")
+
+        if resp.status_code == 403:
+            _circuit["open"] = True
+            _circuit["last_check"] = time.time()
+            raise HTTPException(status_code=503, detail="StockTwits API blocked by Cloudflare protection")
         if resp.status_code == 404:
             raise HTTPException(status_code=404, detail=f"Ticker {ticker} not found on StockTwits")
         if resp.status_code != 200:
             raise HTTPException(status_code=resp.status_code, detail="StockTwits API error")
+
+        # API accessible: reset circuit breaker
+        _circuit["open"] = False
 
         data = resp.json()
         messages = data.get("messages", [])
@@ -62,12 +86,20 @@ async def get_stocktwits_sentiment(ticker: str):
 @router.get("/trending")
 async def get_trending_tickers():
     """Get trending tickers from StockTwits."""
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(f"{STOCKTWITS_BASE}/trending/symbols.json")
+    if _circuit["open"] and (time.time() - _circuit["last_check"]) < _circuit["cooldown"]:
+        raise HTTPException(status_code=503, detail="StockTwits API unavailable (Cloudflare protection)")
 
+    try:
+        resp = await _client.get(f"{STOCKTWITS_BASE}/trending/symbols.json")
+
+        if resp.status_code == 403:
+            _circuit["open"] = True
+            _circuit["last_check"] = time.time()
+            raise HTTPException(status_code=503, detail="StockTwits API blocked by Cloudflare protection")
         if resp.status_code != 200:
             raise HTTPException(status_code=resp.status_code, detail="StockTwits API error")
+
+        _circuit["open"] = False
 
         data = resp.json()
         symbols = data.get("symbols", [])
