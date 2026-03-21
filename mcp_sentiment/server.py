@@ -9,11 +9,13 @@ from fastmcp import FastMCP
 from mcp_sentiment.tools.reddit import router as reddit_router
 from mcp_sentiment.tools.stocktwits import router as stocktwits_router
 from mcp_sentiment.tools.combined import router as combined_router
+from mcp_sentiment.tools.finnhub_sentiment import router as finnhub_sentiment_router
+from mcp_sentiment.tools.fear_greed import router as fear_greed_router
+from mcp_sentiment.tools.alphavantage import router as alphavantage_router
 
 _tool_app = FastAPI()
-_tool_app.include_router(reddit_router)
-_tool_app.include_router(stocktwits_router)
-_tool_app.include_router(combined_router)
+for r in [reddit_router, stocktwits_router, combined_router, finnhub_sentiment_router, fear_greed_router, alphavantage_router]:
+    _tool_app.include_router(r)
 
 mcp = FastMCP.from_fastapi(app=_tool_app)
 mcp_app = mcp.streamable_http_app()
@@ -35,14 +37,13 @@ async def lifespan(app):
 
 app = FastAPI(
     title="Sentiment Analysis MCP",
-    description="MCP server providing social sentiment analysis from Reddit and StockTwits.",
-    version="0.1.0",
+    description="MCP server providing multi-source sentiment analysis (Finnhub, Alpha Vantage, Reddit, StockTwits, CNN Fear & Greed).",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
-app.include_router(reddit_router)
-app.include_router(stocktwits_router)
-app.include_router(combined_router)
+for r in [reddit_router, stocktwits_router, combined_router, finnhub_sentiment_router, fear_greed_router, alphavantage_router]:
+    app.include_router(r)
 
 
 @app.get("/health")
