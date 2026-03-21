@@ -1,10 +1,13 @@
+import os
 import time
 import httpx
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/sentiment", tags=["StockTwits Sentiment"])
 
-STOCKTWITS_BASE = "https://api.stocktwits.com/api/2"
+STOCKTWITS_BASE = os.environ.get(
+    "STOCKTWITS_PROXY_URL", "https://stocktwits-proxy.sitecraft-it.com"
+)
 DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; IB_MCP/1.0)",
     "Accept": "application/json",

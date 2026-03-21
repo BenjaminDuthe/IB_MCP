@@ -1,0 +1,8 @@
+name = "stocktwits-proxy"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+workers_dev = true
+
+routes = [
+  { pattern = "stocktwits-proxy.sitecraft-it.com/*", zone_name = "sitecraft-it.com" }
+]
