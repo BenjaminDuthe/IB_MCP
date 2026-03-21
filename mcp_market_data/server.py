@@ -10,13 +10,12 @@ from mcp_market_data.tools.stock import router as stock_router
 from mcp_market_data.tools.fundamentals import router as fundamentals_router
 from mcp_market_data.tools.history import router as history_router
 from mcp_market_data.tools.overview import router as overview_router
+from mcp_market_data.tools.charts import router as charts_router
 
 # Create MCP from a temporary FastAPI to extract tools
 _tool_app = FastAPI()
-_tool_app.include_router(stock_router)
-_tool_app.include_router(fundamentals_router)
-_tool_app.include_router(history_router)
-_tool_app.include_router(overview_router)
+for r in [stock_router, fundamentals_router, history_router, overview_router, charts_router]:
+    _tool_app.include_router(r)
 
 mcp = FastMCP.from_fastapi(app=_tool_app)
 mcp_app = mcp.streamable_http_app()
@@ -43,10 +42,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.include_router(stock_router)
-app.include_router(fundamentals_router)
-app.include_router(history_router)
-app.include_router(overview_router)
+for r in [stock_router, fundamentals_router, history_router, overview_router, charts_router]:
+    app.include_router(r)
 
 
 @app.get("/health")

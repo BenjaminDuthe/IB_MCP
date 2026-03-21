@@ -10,6 +10,9 @@ dependencies = [
     "yfinance>=0.2.40",
     "pandas>=2.2.0",
     "pydantic>=2.11,<2.12",
+    "mplfinance>=0.12.10b0",
+    "matplotlib>=3.9.0",
+    "numpy>=1.26.0",
 ]
 
 [dependency-groups]
