@@ -86,6 +86,11 @@ async def get_finnhub_sentiment(ticker: str):
         return result
     except HTTPException:
         raise
+    except finnhub.FinnhubAPIException as e:
+        status = 503 if "403" in str(e) else 502
+        detail = "Finnhub news_sentiment requires a premium plan" if "403" in str(e) else str(e)
+        logger.warning(f"Finnhub API error for {ticker}: {e}")
+        raise HTTPException(status_code=status, detail=detail)
     except Exception as e:
         logger.error(f"Finnhub sentiment error for {ticker}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
