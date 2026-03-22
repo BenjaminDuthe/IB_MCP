@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta
 
 import finnhub
+from finnhub.exceptions import FinnhubAPIException
 from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter(tags=["Economic Calendar"])
@@ -54,7 +55,18 @@ def _fetch_economic_calendar(days_ahead: int) -> dict:
     from_date = datetime.now().strftime("%Y-%m-%d")
     to_date = (datetime.now() + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
 
-    raw = client.economic_calendar(_from=from_date, to=to_date)
+    try:
+        raw = client.calendar_economic(_from=from_date, to=to_date)
+    except FinnhubAPIException as e:
+        if "403" in str(e):
+            return {
+                "events": [],
+                "total": 0,
+                "period": f"{from_date} to {to_date}",
+                "next_high_impact": None,
+                "error": "Economic calendar requires Finnhub premium plan. Earnings and IPO calendars are available on free tier.",
+            }
+        raise
     events_raw = raw.get("economicCalendar", []) if isinstance(raw, dict) else []
 
     # Filter US + high/medium impact
@@ -106,7 +118,7 @@ def _fetch_earnings_calendar(days_ahead: int) -> dict:
     from_date = datetime.now().strftime("%Y-%m-%d")
     to_date = (datetime.now() + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
 
-    raw = client.earnings_calendar(_from=from_date, to=to_date, international=False)
+    raw = client.earnings_calendar(_from=from_date, to=to_date, symbol="", international=False)
     earnings_raw = raw.get("earningsCalendar", []) if isinstance(raw, dict) else []
 
     earnings = []
