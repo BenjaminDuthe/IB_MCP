@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sentiment", tags=["Alpha Vantage Sentiment"])
 
 AV_BASE = "https://www.alphavantage.co/query"
-CACHE_TTL_SECONDS = 3600  # 1h (only 25 calls/day!)
-DAILY_LIMIT = 20  # buffer of 5
+CACHE_TTL_SECONDS = 14400  # 4h (only 25 calls/day — aggressive caching)
+DAILY_LIMIT = 24  # buffer of 1
 
 DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; IB_MCP/1.0)",

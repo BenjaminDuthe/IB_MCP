@@ -39,17 +39,30 @@ async def get_stock_price(ticker: str):
 
     try:
         info = await asyncio.to_thread(_fetch_ticker_info, ticker.upper())
-        if not info or "regularMarketPrice" not in info:
+        if not info:
             raise HTTPException(status_code=404, detail=f"No data found for {ticker}")
+
+        # Fallback: use currentPrice/previousClose when regularMarket data is missing (weekend/after-hours)
+        price = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")
+        if not price:
+            raise HTTPException(status_code=404, detail=f"No price data for {ticker}")
+
+        prev_close = info.get("regularMarketPreviousClose") or info.get("previousClose")
+        change = info.get("regularMarketChange")
+        change_pct = info.get("regularMarketChangePercent")
+        if change is None and price and prev_close:
+            change = round(price - prev_close, 2)
+            change_pct = round((change / prev_close) * 100, 2)
+
         result = {
             "ticker": ticker.upper(),
-            "price": info.get("regularMarketPrice"),
-            "previous_close": info.get("regularMarketPreviousClose"),
-            "change": info.get("regularMarketChange"),
-            "change_percent": info.get("regularMarketChangePercent"),
-            "volume": info.get("regularMarketVolume"),
-            "day_high": info.get("regularMarketDayHigh"),
-            "day_low": info.get("regularMarketDayLow"),
+            "price": price,
+            "previous_close": prev_close,
+            "change": change,
+            "change_percent": change_pct,
+            "volume": info.get("regularMarketVolume") or info.get("volume"),
+            "day_high": info.get("regularMarketDayHigh") or info.get("dayHigh"),
+            "day_low": info.get("regularMarketDayLow") or info.get("dayLow"),
             "market_cap": info.get("marketCap"),
             "currency": info.get("currency"),
         }

@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import io
 import logging
 from datetime import datetime
@@ -204,16 +205,25 @@ def _generate_fear_greed_gauge(score: float) -> io.BytesIO:
     return buf
 
 
+def _chart_response(buf: io.BytesIO, fmt: str, filename: str):
+    """Return chart as PNG stream or base64 JSON depending on format."""
+    if fmt == "base64":
+        b64 = base64.b64encode(buf.read()).decode("ascii")
+        return {"image_base64": b64, "filename": filename, "media_type": "image/png"}
+    return StreamingResponse(buf, media_type="image/png")
+
+
 @router.get("/price/{ticker}")
 async def chart_price(
     ticker: str,
     period: str = Query("6mo", description="Period: 1mo,3mo,6mo,1y,2y,5y"),
     interval: str = Query("1d", description="Interval: 1d,1wk"),
+    format: str = Query("png", description="Output: png (image) or base64 (JSON with encoded image)"),
 ):
-    """Generate a candlestick chart with volume and moving averages. Returns PNG image."""
+    """Generate a candlestick chart with volume and moving averages. Returns PNG image or base64 JSON."""
     try:
         buf = await asyncio.to_thread(_generate_candlestick, ticker.upper(), period, interval)
-        return StreamingResponse(buf, media_type="image/png")
+        return _chart_response(buf, format, f"chart_{ticker.upper()}_{period}.png")
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -225,8 +235,9 @@ async def chart_price(
 async def chart_comparison(
     tickers: str = Query(..., description="Comma-separated tickers: AAPL,MSFT,GOOGL"),
     period: str = Query("6mo", description="Period: 1mo,3mo,6mo,1y,2y"),
+    format: str = Query("png", description="Output: png (image) or base64 (JSON with encoded image)"),
 ):
-    """Generate a normalized performance comparison chart. Returns PNG image."""
+    """Generate a normalized performance comparison chart. Returns PNG image or base64 JSON."""
     ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
     if len(ticker_list) < 2:
         raise HTTPException(status_code=400, detail="At least 2 tickers required")
@@ -234,7 +245,7 @@ async def chart_comparison(
         raise HTTPException(status_code=400, detail="Maximum 8 tickers")
     try:
         buf = await asyncio.to_thread(_generate_comparison, ticker_list, period)
-        return StreamingResponse(buf, media_type="image/png")
+        return _chart_response(buf, format, f"comparison_{period}.png")
     except Exception as e:
         logger.error(f"Comparison chart error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -243,11 +254,12 @@ async def chart_comparison(
 @router.get("/feargreed")
 async def chart_fear_greed(
     score: float = Query(..., ge=0, le=100, description="Fear & Greed score (0-100)"),
+    format: str = Query("png", description="Output: png (image) or base64 (JSON with encoded image)"),
 ):
-    """Generate a Fear & Greed gauge chart. Returns PNG image."""
+    """Generate a Fear & Greed gauge chart. Returns PNG image or base64 JSON."""
     try:
         buf = await asyncio.to_thread(_generate_fear_greed_gauge, score)
-        return StreamingResponse(buf, media_type="image/png")
+        return _chart_response(buf, format, f"feargreed_{int(score)}.png")
     except Exception as e:
         logger.error(f"Fear & Greed chart error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
