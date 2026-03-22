@@ -12,10 +12,13 @@ from mcp_market_data.tools.history import router as history_router
 from mcp_market_data.tools.overview import router as overview_router
 from mcp_market_data.tools.charts import router as charts_router
 from mcp_market_data.tools.deep_analysis import router as deep_analysis_router
+from mcp_market_data.tools.technicals import router as technicals_router
+from mcp_market_data.tools.economic_calendar import router as economic_calendar_router
+from mcp_market_data.tools.technical_charts import router as technical_charts_router
 
 # Create MCP from a temporary FastAPI to extract tools
 _tool_app = FastAPI()
-for r in [stock_router, fundamentals_router, history_router, overview_router, charts_router, deep_analysis_router]:
+for r in [stock_router, fundamentals_router, history_router, overview_router, charts_router, deep_analysis_router, technicals_router, economic_calendar_router, technical_charts_router]:
     _tool_app.include_router(r)
 
 mcp = FastMCP.from_fastapi(app=_tool_app)
@@ -43,7 +46,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-for r in [stock_router, fundamentals_router, history_router, overview_router, charts_router, deep_analysis_router]:
+for r in [stock_router, fundamentals_router, history_router, overview_router, charts_router, deep_analysis_router, technicals_router, economic_calendar_router, technical_charts_router]:
     app.include_router(r)
 
 

@@ -13,6 +13,7 @@ dependencies = [
     "mplfinance>=0.12.10b0",
     "matplotlib>=3.9.0",
     "numpy>=1.26.0",
+    "finnhub-python>=2.4.20",
 ]
 
 [dependency-groups]
