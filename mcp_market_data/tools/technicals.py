@@ -237,6 +237,19 @@ def _compute_technicals(ticker: str, period: str) -> dict:
     # Support/Resistance
     sr = _support_resistance_levels(hist) if len(hist) >= 12 else {"supports": [], "resistances": [], "pivot": None}
 
+    # Short interest (FINRA, updated ~every 2 weeks)
+    info = t.info
+    short_interest = None
+    shares_short = info.get("sharesShort")
+    if shares_short:
+        short_interest = {
+            "shares_short": shares_short,
+            "short_ratio": info.get("shortRatio"),
+            "short_percent_of_float": info.get("shortPercentOfFloat"),
+            "shares_short_prior_month": info.get("sharesShortPriorMonth"),
+            "date": info.get("dateShortInterest"),
+        }
+
     summary = _generate_summary(rsi_val, rsi_sig, stoch, boll, macd_data, ma_trend)
 
     return {
@@ -254,6 +267,7 @@ def _compute_technicals(ticker: str, period: str) -> dict:
         "atr_14": atr_val,
         "stochastic": stoch,
         "support_resistance": sr,
+        "short_interest": short_interest,
         "summary": summary,
     }
 
