@@ -8,7 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 
-from scoring_engine.config import WATCHLIST, TZ_CET
+from scoring_engine.config import WATCHLIST, TZ_CET, AGENT_LAYERS_ENABLED, DEBATE_ENABLED, RISK_SIZING_ENABLED, FEEDBACK_ENABLED
 from scoring_engine.pipeline import (
     scan_ticker,
     scan_market,
@@ -84,6 +84,12 @@ async def health():
         "scheduler_running": scheduler.running,
         "jobs": len(scheduler.get_jobs()),
         "watchlist_size": len(WATCHLIST),
+        "layers": {
+            "agents": AGENT_LAYERS_ENABLED,
+            "debate": DEBATE_ENABLED,
+            "risk_sizing": RISK_SIZING_ENABLED,
+            "feedback": FEEDBACK_ENABLED,
+        },
         "timestamp": datetime.now(TZ_CET).isoformat(),
     }
 

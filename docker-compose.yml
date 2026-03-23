@@ -235,10 +235,17 @@ services:
       - INFLUXDB_PASSWORD=tw_s3cur3_2026
       - MCP_MARKET_DATA_URL=http://mcp_market_data:${MCP_MARKET_DATA_PORT}
       - MCP_SENTIMENT_URL=http://mcp_sentiment:${MCP_SENTIMENT_PORT}
+      - DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1485783083528753364/LoMfWa67YCHS_nhC6DwuxhQcrXwvy5wwcvTLlIIRsy-YBAhLo75oZgEHFl8wEPtXhFA3
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - AGENT_LAYERS_ENABLED=true
+      - DEBATE_ENABLED=true
+      - RISK_SIZING_ENABLED=false
+      - FEEDBACK_ENABLED=false
     deploy:
       resources:
         limits:
-          memory: 384M
+          memory: 512M
           cpus: '1.0'
         reservations:
           memory: 256M

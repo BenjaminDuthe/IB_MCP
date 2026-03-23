@@ -119,3 +119,31 @@ async def write_pipeline_status(pipeline: str, duration: float, tickers: int, si
     ]
     line = f"pipeline_status,pipeline={_escape_tag(pipeline)} {','.join(fields)} {ts}"
     return await write_points([line])
+
+
+async def write_analyst_reports(ticker: str, reports) -> bool:
+    """Write analyst agent reports to InfluxDB."""
+    ts = int(time.time())
+    lines = []
+    for r in reports:
+        fields = [
+            f"score={r.score}",
+            f"confidence={r.confidence}i",
+        ]
+        line = f"analyst_report,ticker={_escape_tag(ticker)},agent={_escape_tag(r.agent_name)} {','.join(fields)} {ts}"
+        lines.append(line)
+    return await write_points(lines)
+
+
+async def write_debate(ticker: str, debate: dict) -> bool:
+    """Write debate result to InfluxDB."""
+    ts = int(time.time())
+    fields = [
+        f'verdict="{_escape_field_str(debate.get("verdict", "HOLD"))}"',
+        f"confidence={debate.get('confidence', 0)}i",
+        f"bull_strength={debate.get('bull_strength', 0)}i",
+        f"bear_strength={debate.get('bear_strength', 0)}i",
+        f'key_factor="{_escape_field_str(debate.get("key_factor", "")[:200])}"',
+    ]
+    line = f"debate,ticker={_escape_tag(ticker)} {','.join(fields)} {ts}"
+    return await write_points([line])
