@@ -198,6 +198,12 @@ def _compute_technicals(ticker: str, period: str) -> dict:
 
     last_price = round(float(close.iloc[-1]), 2)
 
+    # 5-day trend
+    trend_5d = None
+    if len(close) >= 6:
+        price_5d_ago = float(close.iloc[-6])
+        trend_5d = round((last_price - price_5d_ago) / price_5d_ago * 100, 2)
+
     # RSI
     rsi_val = _rsi(close)
     rsi_sig = _rsi_signal(rsi_val)
@@ -265,6 +271,7 @@ def _compute_technicals(ticker: str, period: str) -> dict:
         "bollinger": boll,
         "volume": {"current": current_vol, "avg_20d": avg_vol_20, "relative": rel_vol},
         "atr_14": atr_val,
+        "trend_5d": trend_5d,
         "stochastic": stoch,
         "support_resistance": sr,
         "short_interest": short_interest,

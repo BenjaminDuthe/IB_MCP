@@ -152,6 +152,33 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  rss_collector:
+    container_name: rss_collector
+    build:
+      context: ./rss_collector
+      dockerfile: Dockerfile
+    image: ib_mcp_rss_collector:v0.1
+    ports:
+      - "${RSS_COLLECTOR_PORT}:${RSS_COLLECTOR_PORT}"
+    env_file:
+      - .env
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: '0.5'
+        reservations:
+          memory: 192M
+    networks:
+      - mcp_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${RSS_COLLECTOR_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
   telegram_bot:
     container_name: telegram_bot
     build:
@@ -187,6 +214,47 @@ services:
     volumes:
       - trading_data:/data
       - ./shared:/app/shared:ro
+    restart: unless-stopped
+
+  scoring_engine:
+    container_name: scoring_engine
+    build:
+      context: ./scoring_engine
+      dockerfile: Dockerfile
+    image: ib_mcp_scoring_engine:v0.1
+    ports:
+      - "5030:5030"
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_URL=http://192.168.1.120:11434
+      - OLLAMA_MODEL=llama3.2:3b
+      - INFLUXDB_URL=http://192.168.1.123:8086
+      - INFLUXDB_DATABASE=trading
+      - INFLUXDB_USER=trading_writer
+      - INFLUXDB_PASSWORD=tw_s3cur3_2026
+      - MCP_MARKET_DATA_URL=http://mcp_market_data:${MCP_MARKET_DATA_PORT}
+      - MCP_SENTIMENT_URL=http://mcp_sentiment:${MCP_SENTIMENT_PORT}
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+    depends_on:
+      mcp_market_data:
+        condition: service_healthy
+      mcp_sentiment:
+        condition: service_healthy
+    networks:
+      - mcp_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5030/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     restart: unless-stopped
 
 networks:

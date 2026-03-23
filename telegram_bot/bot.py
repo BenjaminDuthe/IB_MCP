@@ -8,6 +8,8 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from typing import Optional
 
+import httpx
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -63,6 +65,7 @@ IB_ACCOUNT_ID = os.environ.get("IB_ACCOUNT_ID", "")
 PORTFOLIO_SCAN_INTERVAL = int(os.environ.get("PORTFOLIO_SCAN_INTERVAL_MINUTES", "60"))
 MARKET_SCAN_INTERVAL = int(os.environ.get("MARKET_SCAN_INTERVAL_MINUTES", "30"))
 SIGNAL_EXPIRY_MINUTES = int(os.environ.get("SIGNAL_EXPIRY_MINUTES", "30"))
+SCORING_ENGINE_URL = os.environ.get("SCORING_ENGINE_URL", "http://scoring_engine:5030")
 
 # Global state
 mcp_manager = MCPClientManager()
@@ -1181,28 +1184,34 @@ async def _handle_cancel_execute(query, signal_id: int, context):
 # ============================================
 
 async def scheduled_portfolio_scan():
-    """Periodic portfolio scan."""
+    """Periodic portfolio scan via local scoring engine (0 Claude tokens)."""
     if not TELEGRAM_CHAT_ID:
         return
 
-    # A3: Skip if market is closed
     market_open, _ = is_us_market_open()
     if not market_open:
         logger.info("Portfolio scan skipped: market closed")
         return
 
     try:
-        response_text, signals = await orchestrator.process_message(
-            "Scan my current portfolio. Check for any positions that need attention: "
-            "significant P&L changes, approaching stop losses, or risk concentrations. "
-            "Only generate a trade signal if action is clearly needed.",
-            trigger_type="scheduled_portfolio",
-        )
-        # Only notify if there's something significant
-        if signals or "attention" in response_text.lower() or "alert" in response_text.lower():
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.get(f"{SCORING_ENGINE_URL}/api/portfolio-check")
+            if resp.status_code != 200:
+                logger.warning("Scoring engine portfolio-check: HTTP %d", resp.status_code)
+                return
+            data = resp.json()
+        signals_count = data.get("signals_generated", 0)
+        if signals_count > 0:
+            results = data.get("results", [])
+            lines = ["📋 <b>Portfolio Scan (auto)</b>\n"]
+            for r in results:
+                if r.get("signal_sent"):
+                    s = r["score"]
+                    l = r.get("llm", {})
+                    lines.append(f"  🟢 {s['ticker']}: {s['score']}/5 — {l.get('summary', '')[:100]}")
             await _application.bot.send_message(
                 chat_id=TELEGRAM_CHAT_ID,
-                text=f"📋 <b>Portfolio Scan</b>\n\n{response_text[:4000]}",
+                text="\n".join(lines)[:4000],
                 parse_mode="HTML",
             )
     except Exception as e:
@@ -1210,61 +1219,82 @@ async def scheduled_portfolio_scan():
 
 
 async def scheduled_market_scan():
-    """Periodic market scan."""
+    """Periodic market scan via local scoring engine (0 Claude tokens)."""
     if not TELEGRAM_CHAT_ID:
         return
 
-    # A3: Skip if market is closed
     market_open, _ = is_us_market_open()
     if not market_open:
         logger.info("Market scan skipped: market closed")
         return
 
     try:
-        response_text, _ = await orchestrator.process_message(
-            "Quick market pulse check: any significant moves in major indices or VIX? "
-            "Only report if there's something noteworthy.",
-            trigger_type="scheduled_market",
-        )
-        if any(word in response_text.lower() for word in ["significant", "alert", "unusual", "spike", "crash", "surge"]):
-            await _application.bot.send_message(
-                chat_id=TELEGRAM_CHAT_ID,
-                text=f"🚨 <b>Market Alert</b>\n\n{response_text[:4000]}",
-                parse_mode="HTML",
-            )
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.get(f"{SCORING_ENGINE_URL}/api/market-pulse")
+            if resp.status_code != 200:
+                logger.warning("Scoring engine market-pulse: HTTP %d", resp.status_code)
+                return
+            data = resp.json()
+        # Check if any ticker scored >= 4
+        for market_name, market_data in data.items():
+            for r in market_data.get("results", []):
+                if r.get("score", {}).get("score", 0) >= 4:
+                    s = r["score"]
+                    l = r.get("llm", {})
+                    await _application.bot.send_message(
+                        chat_id=TELEGRAM_CHAT_ID,
+                        text=(
+                            f"🚨 <b>Market Alert</b> — {s['ticker']}\n\n"
+                            f"  Score: {s['score']}/5 | {l.get('verdict', '?')}\n"
+                            f"  {l.get('summary', '')[:200]}"
+                        ),
+                        parse_mode="HTML",
+                    )
     except Exception as e:
         logger.error(f"Scheduled market scan failed: {e}")
 
 
 async def scheduled_ideas_scan():
-    """Automatic buy ideas scan, runs 2x/day during US market hours."""
+    """Automatic buy ideas scan via local scoring engine (0 Claude tokens)."""
     if not TELEGRAM_CHAT_ID:
         return
 
     chat_id = TELEGRAM_CHAT_ID
 
     try:
-        response_text, signals = await orchestrator.process_message(
-            IDEAS_PROMPT, trigger_type="scheduled_ideas"
-        )
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.get(f"{SCORING_ENGINE_URL}/api/top-signals?limit=3")
+            if resp.status_code != 200:
+                logger.warning("Scoring engine top-signals: HTTP %d", resp.status_code)
+                return
+            top = resp.json()
     except Exception as e:
         logger.error(f"Scheduled ideas scan failed: {e}")
         return
 
-    bot_ctx = _BotContext(_application.bot)
-    await _send_long_message(chat_id, response_text, bot_ctx)
+    if not top:
+        return
 
-    if signals:
-        emoji_nums = ["1️⃣", "2️⃣", "3️⃣"]
-        recap_lines = ["\n💡 <b>IDEES D'ACHAT</b> (scan auto)\n"]
-        for i, s in enumerate(signals):
-            action_fr = {"BUY": "ACHAT", "SELL": "VENTE"}.get(s.action.value, s.action.value)
-            conf = f"{s.confidence:.0f}%" if s.confidence else "?"
-            num = emoji_nums[i] if i < len(emoji_nums) else f"{i+1}."
-            recap_lines.append(f"{num} {_escape_html(s.ticker)} - {action_fr} @ ${s.price or 0:.2f} - Confiance {conf}")
-        recap_lines.append("\nApprouve ou refuse chaque idee ci-dessous 👇")
-        await _application.bot.send_message(chat_id=chat_id, text="\n".join(recap_lines), parse_mode="HTML")
+    emoji_nums = ["1️⃣", "2️⃣", "3️⃣"]
+    lines = ["💡 <b>IDEES D'ACHAT</b> (scan auto)\n"]
+    for i, r in enumerate(top):
+        s = r.get("score", {})
+        l = r.get("llm", {})
+        num = emoji_nums[i] if i < len(emoji_nums) else f"{i+1}."
+        verdict = l.get("verdict", "?")
+        conf = l.get("confidence", 0)
+        lines.append(
+            f"{num} {_escape_html(s.get('ticker', '?'))} — "
+            f"{verdict} ({conf}%) — Score {s.get('score', 0)}/5 — "
+            f"${s.get('price', 0):.2f}"
+        )
+        if l.get("summary"):
+            lines.append(f"    {l['summary'][:120]}")
+    await _application.bot.send_message(chat_id=chat_id, text="\n".join(lines), parse_mode="HTML")
 
+    # Legacy compatibility: no signals to process through approval flow
+    signals = []
+    if False:  # Kept for reference - approval flow not used with scoring engine
         for signal in signals:
             await _process_trade_signal(chat_id, signal, bot_ctx)
 
@@ -1581,29 +1611,23 @@ async def scheduled_watchlist_scan():
 # ============================================
 
 async def scheduled_weekly_digest():
-    """Monday morning weekly briefing."""
+    """Monday morning weekly briefing via local scoring engine (0 Claude tokens)."""
     if not TELEGRAM_CHAT_ID or not _application:
         return
 
     try:
-        response_text, signals = await orchestrator.process_message(
-            "Briefing hebdomadaire complet : "
-            "1. Earnings importants de la semaine (news_get_earnings_calendar) "
-            "2. Tickers tendance (sentiment_get_trending_tickers) "
-            "3. Resume des mouvements de la semaine passee "
-            "4. Opportunites a surveiller cette semaine "
-            "Sois synthetique mais complet.",
-            trigger_type="weekly_digest",
-        )
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            resp = await client.get(f"{SCORING_ENGINE_URL}/api/weekly-summary")
+            if resp.status_code != 200:
+                logger.warning("Scoring engine weekly-summary: HTTP %d", resp.status_code)
+                return
+            summary = resp.text if isinstance(resp.text, str) else str(resp.json())
     except Exception as e:
         logger.error(f"Weekly digest failed: {e}")
         return
 
     bot_ctx = _BotContext(_application.bot)
-    await _send_long_message(TELEGRAM_CHAT_ID, f"📅 <b>BRIEFING HEBDOMADAIRE</b>\n\n{response_text}", bot_ctx)
-
-    for signal in signals:
-        await _process_trade_signal(TELEGRAM_CHAT_ID, signal, bot_ctx)
+    await _send_long_message(TELEGRAM_CHAT_ID, f"📅 <b>BRIEFING HEBDOMADAIRE</b>\n\n{summary[:4000]}", bot_ctx)
 
 
 async def scheduled_premarket_earnings():
