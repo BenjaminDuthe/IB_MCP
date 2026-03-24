@@ -123,7 +123,7 @@ async def _fetch_macro_overview() -> dict:
 
 # --- Core pipeline ---
 
-async def scan_ticker(ticker: str, macro_context: dict | None = None) -> dict:
+async def scan_ticker(ticker: str, macro_context: dict | None = None, force_debate: bool = False) -> dict:
     """Full analysis pipeline for a single ticker."""
     result = {"ticker": ticker, "error": None}
 
@@ -162,7 +162,7 @@ async def scan_ticker(ticker: str, macro_context: dict | None = None) -> dict:
         await write_analyst_reports(ticker, reports)
 
         # --- PHASE 4: Debate (if enabled) ---
-        if DEBATE_ENABLED:
+        if DEBATE_ENABLED or force_debate:
             from scoring_engine.debate import run_debate
             debate_result = await run_debate(ticker, reports)
             result["debate"] = debate_result
@@ -198,7 +198,7 @@ async def scan_ticker(ticker: str, macro_context: dict | None = None) -> dict:
         )
     await write_scoring(ticker, score_data["market"], score_data, llm)
 
-    if AGENT_LAYERS_ENABLED and DEBATE_ENABLED and result.get("debate"):
+    if AGENT_LAYERS_ENABLED and (DEBATE_ENABLED or force_debate) and result.get("debate"):
         await write_debate(ticker, result["debate"])
 
     # --- PHASE 7: Signal + alert ---

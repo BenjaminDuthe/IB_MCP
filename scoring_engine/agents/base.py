@@ -33,7 +33,7 @@ class OllamaClient:
     def __init__(self, url: str = OLLAMA_URL, model: str = OLLAMA_MODEL):
         self.url = url
         self.model = model
-        self._client = httpx.AsyncClient(timeout=45.0)
+        self._client = httpx.AsyncClient(timeout=120.0)
 
     async def generate(
         self, system_prompt: str, user_prompt: str,

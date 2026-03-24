@@ -127,6 +127,13 @@ async def api_scan_ticker(ticker: str):
     return await scan_ticker(ticker)
 
 
+@app.get("/api/analyze/{ticker}")
+async def api_deep_analyze(ticker: str):
+    """Full analysis with debate forced ON (manual trigger only)."""
+    ticker = ticker.upper()
+    return await scan_ticker(ticker, force_debate=True)
+
+
 @app.get("/api/market-pulse")
 async def api_market_pulse():
     """Scan all tickers, return summary."""
