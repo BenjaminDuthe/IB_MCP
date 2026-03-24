@@ -105,6 +105,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=${MCP_SENTIMENT_PORT}
       - MCP_SENTIMENT_INTERNAL_URL=http://mcp_sentiment:${MCP_SENTIMENT_PORT}
+      - MONGODB_URI=${MONGODB_URI}
     deploy:
       resources:
         limits:

@@ -36,6 +36,10 @@ FEEDS: list[FeedConfig] = [
     FeedConfig(name="Investir Les Echos", url="https://investir.lesechos.fr/rss/rss_une.xml", category="fr_eu", language="fr"),
     # Boursorama: RSS fermé (404)
     FeedConfig(name="CNBC Europe", url="https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19794221", category="fr_eu"),
+    FeedConfig(name="Zonebourse Actu", url="https://www.zonebourse.com/rss/", category="fr_eu", language="fr"),
+    FeedConfig(name="Capital Bourse", url="https://www.capital.fr/entreprises-marches/rss", category="fr_eu", language="fr"),
+    FeedConfig(name="La Tribune Economie", url="https://www.latribune.fr/rss/rubriques/economie.html", category="fr_eu", language="fr"),
+    FeedConfig(name="Reuters Europe", url="https://www.reutersagency.com/feed/?best-regions=europe&post_type=best", category="fr_eu"),
 
     # =============================================
     # SEC & EARNINGS (8 feeds)

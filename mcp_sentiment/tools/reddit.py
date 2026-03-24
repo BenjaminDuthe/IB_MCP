@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sentiment", tags=["Reddit Sentiment"])
 
-SUBREDDITS = ["wallstreetbets", "stocks", "investing"]
+SUBREDDITS = ["wallstreetbets", "stocks", "investing", "vosfinances", "finanzen", "eupersonalfinance"]
 
 # Module-level Reddit client cache
 _reddit_client = None

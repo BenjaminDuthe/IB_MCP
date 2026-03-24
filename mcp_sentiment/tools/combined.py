@@ -14,6 +14,7 @@ SOURCE_WEIGHTS = {
     "alphavantage": 3.0,
     "reddit": 3.0,       # scaled by volume_factor
     "stocktwits": 2.5,   # scaled by volume_factor
+    "rss": 3.0,          # RSS article-based sentiment (EU + US)
 }
 
 FEAR_GREED_BLEND = 0.20  # 20% macro blend
@@ -33,13 +34,14 @@ async def get_combined_sentiment(ticker: str):
         except Exception as e:
             return source, {"error": str(e)}
 
-    # Fetch all 5 sources in parallel
+    # Fetch all 6 sources in parallel
     fetches = await asyncio.gather(
         _fetch("reddit", f"{base_url}/sentiment/reddit/{ticker}"),
         _fetch("stocktwits", f"{base_url}/sentiment/stocktwits/{ticker}"),
         _fetch("finnhub", f"{base_url}/sentiment/finnhub/{ticker}"),
         _fetch("alphavantage", f"{base_url}/sentiment/alphavantage/{ticker}"),
         _fetch("fear_greed", f"{base_url}/sentiment/feargreed"),
+        _fetch("rss", f"{base_url}/sentiment/rss/{ticker}"),
     )
     results = dict(fetches)
 
@@ -78,6 +80,14 @@ async def get_combined_sentiment(ticker: str):
         ticker_scores.append(st_score)
         ticker_weights.append(SOURCE_WEIGHTS["stocktwits"] * volume_factor)
         sources_used.append("stocktwits")
+
+    # RSS article-based sentiment (weight 3.0 × volume_factor)
+    rss = results.get("rss", {})
+    if rss.get("sentiment_score") is not None and "error" not in rss:
+        rss_volume = min(rss.get("article_count", 0), 20) / 20
+        ticker_scores.append(rss["sentiment_score"])
+        ticker_weights.append(SOURCE_WEIGHTS["rss"] * rss_volume)
+        sources_used.append("rss")
 
     # --- Macro source: Fear & Greed ---
     fear_greed = results.get("fear_greed", {})
