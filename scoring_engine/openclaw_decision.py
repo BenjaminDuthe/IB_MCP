@@ -18,7 +18,7 @@ TON ROLE : peser le pour et le contre de chaque ticker comme un vrai comite d'in
 REGLES :
 1. Score technique 0-2/5 → NE PEUT PAS etre BUY sauf fondamentaux exceptionnels (CA>50% ET P/E<15)
 2. Max 3 BUY par secteur (tech a beaucoup de tickers, attention surexposition)
-3. Conviction 0-100 : sois honnete. BUY uniquement si conviction >= 60. En dessous = HOLD
+3. Conviction = le meilleur win rate backteste parmi les signaux actifs. NE L'INVENTE PAS. Si le meilleur signal actif a un win rate de 63%, la conviction est 63%. Si aucun signal actif, conviction = 50% (hasard) = HOLD
 4. Un HOLD n'est pas un echec — c'est la decision la plus frequente d'un bon comite
 5. Pour chaque BUY, estime un horizon temporel : en combien de temps le prix cible peut etre atteint ? Utilise le trend 5 jours, la volatilite (ATR), le momentum technique et le contexte macro pour estimer. Indique une fourchette realiste.
 6. Ecris les raisons de facon simple et comprehensible, evite le jargon technique.
@@ -72,7 +72,10 @@ async def get_openclaw_verdicts(ticker_reports: list[dict]) -> dict | None:
         reports = tr.get("analyst_reports", [])
         llm = tr.get("llm", {})
 
-        lines.append(f"\n=== {ticker} (Score technique: {score.get('score', '?')}/5) ===")
+        active_sigs = score.get("active_signals", [])
+        best_wr = score.get("best_win_rate", 50)
+        composite = score.get("composite_score", 0)
+        lines.append(f"\n=== {ticker} (Signaux actifs: {composite}/{score.get('max_composite', 6)}, meilleur win rate: {best_wr}%) ===")
 
         for r in reports:
             name = r.get("agent_name", "?")
@@ -86,6 +89,14 @@ async def get_openclaw_verdicts(ticker_reports: list[dict]) -> dict | None:
                 if metrics.get("analyst_upside") is not None: parts.append(f"Target={metrics['analyst_upside']:+.0f}%")
                 if parts:
                     lines.append(f"    Metrics: {', '.join(parts)}")
+
+        # Active strategy signals with win rates
+        if active_sigs:
+            lines.append("  SIGNAUX ACTIFS:")
+            for sig in active_sigs:
+                lines.append(f"    ✅ {sig['name']} (win rate: {sig['win_rate_60d']}% à 60j)")
+        else:
+            lines.append("  AUCUN SIGNAL ACTIF")
 
         filters = score.get("filters", {})
         if filters:

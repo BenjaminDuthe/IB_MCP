@@ -8,7 +8,9 @@ RUN pip install --no-cache-dir \
     fastapi==0.115.* \
     uvicorn[standard]==0.34.* \
     httpx==0.28.* \
-    apscheduler==3.11.*
+    apscheduler==3.11.* \
+    numpy==2.2.* \
+    pandas==2.2.*
 
 COPY . /app/scoring_engine/
 
