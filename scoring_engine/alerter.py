@@ -166,7 +166,7 @@ async def alert_signal(
 
 async def alert_scan_summary(market: str, results: list[dict], openclaw_verdicts: dict | None = None) -> None:
     """Option C: compact ranking table + top 5 detailed embeds."""
-    from scoring_engine.config import TICKER_INFO, TICKER_SECTORS
+    from scoring_engine.config import TICKER_INFO, TICKER_SECTORS, TICKER_DESCRIPTION
 
     valid = [r for r in results if not r.get("error") and r.get("score")]
 
@@ -227,9 +227,12 @@ async def alert_scan_summary(market: str, results: list[dict], openclaw_verdicts
     await send_discord_embed([ranking_embed])
 
     # --- MESSAGE 2: Top 5 detailed embeds ---
-    top5 = valid[:5]
+    # Only show detailed cards for BUY verdicts
+    buy_results = [r for r in valid if r.get("llm", {}).get("verdict") == "BUY"]
+    if not buy_results:
+        return  # No BUY = no detailed cards
     embeds = []
-    for rank, r in enumerate(top5, 1):
+    for rank, r in enumerate(buy_results, 1):
         s = r["score"]
         l = r.get("llm", {})
         ticker = s.get("ticker", "?")
@@ -247,8 +250,11 @@ async def alert_scan_summary(market: str, results: list[dict], openclaw_verdicts
         v_emoji = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡"}.get(verdict, "⚪")
         color = {"BUY": COLOR_BUY, "SELL": COLOR_SELL, "HOLD": COLOR_HOLD}.get(verdict, COLOR_INFO)
 
-        desc = f"{v_emoji} **{verdict}** ({conf}%) | Score **{score}/5** | ${price:.2f}\n"
-        desc += f"📍 {exchange} • {sector.title()}"
+        company_desc = TICKER_DESCRIPTION.get(ticker, "")
+        desc = f"📍 {exchange} • {sector.title()}\n"
+        if company_desc:
+            desc += f"*{company_desc}*\n"
+        desc += f"\n{v_emoji} **{verdict}** ({conf}%) | Score **{score}/5** | ${price:.2f}"
 
         fields = []
 
@@ -307,7 +313,7 @@ async def alert_scan_summary(market: str, results: list[dict], openclaw_verdicts
 
     if embeds:
         embeds[-1]["timestamp"] = datetime.utcnow().isoformat()
-        embeds[-1]["footer"] = {"text": f"Trading Agent v2 | Top 5 {market} | Décisions par OpenClaw"}
+        embeds[-1]["footer"] = {"text": f"Trading Agent v2 | {market} — {len(buy_results)} BUY signal(s) | OpenClaw"}
         await send_discord_embed(embeds)
 
 

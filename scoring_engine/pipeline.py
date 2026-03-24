@@ -194,11 +194,24 @@ async def scan_tickers(tickers: list[str]) -> dict:
 
 
 async def scan_market(market: str) -> dict:
-    """Scan all tickers for a market."""
+    """Scan all tickers for a market (legacy compat)."""
     tickers = [t for t, cfg in WATCHLIST.items() if cfg["market"] == market]
     logger.info("Scanning %s market: %s", market, tickers)
     result = await scan_tickers(tickers)
     await alert_scan_summary(market, result["results"], result.get("openclaw_verdicts"))
+    return result
+
+
+async def scan_exchange(exchange: str) -> dict:
+    """Scan all tickers for a specific exchange (Paris, Frankfurt, etc.)."""
+    from scoring_engine.config import EXCHANGE_GROUPS
+    tickers = EXCHANGE_GROUPS.get(exchange, [])
+    if not tickers:
+        logger.warning("No tickers for exchange %s", exchange)
+        return {"error": f"Unknown exchange: {exchange}"}
+    logger.info("Scanning %s exchange: %d tickers", exchange, len(tickers))
+    result = await scan_tickers(tickers)
+    await alert_scan_summary(exchange, result["results"], result.get("openclaw_verdicts"))
     return result
 
 

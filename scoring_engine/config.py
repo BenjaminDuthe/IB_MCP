@@ -1,4 +1,4 @@
-"""Watchlist configuration and market hours."""
+"""Configuration: 78 tickers, 6 exchanges, market hours, services."""
 
 import os
 from zoneinfo import ZoneInfo
@@ -6,11 +6,6 @@ from zoneinfo import ZoneInfo
 # --- Market hours ---
 TZ_CET = ZoneInfo("Europe/Paris")
 TZ_ET = ZoneInfo("America/New_York")
-
-EU_MARKET_OPEN = (9, 0)   # 09:00 CET
-EU_MARKET_CLOSE = (17, 30) # 17:30 CET
-US_MARKET_OPEN = (9, 30)   # 09:30 ET (15:30 CET)
-US_MARKET_CLOSE = (16, 0)  # 16:00 ET (22:00 CET)
 
 # --- Service URLs ---
 MARKET_DATA_URL = os.environ.get("MCP_MARKET_DATA_URL", "http://mcp_market_data:5003")
@@ -44,106 +39,121 @@ DRAWDOWN_REDUCE_THRESHOLD = float(os.environ.get("DRAWDOWN_REDUCE_THRESHOLD", "5
 # --- Performance tracking ---
 WIN_RATE_DRIFT_THRESHOLD = float(os.environ.get("WIN_RATE_DRIFT_THRESHOLD", "0.60"))
 
-# --- Ticker metadata (name, country, exchange) ---
-TICKER_INFO = {
-    # US Tech
-    "NVDA":    {"name": "NVIDIA", "country": "🇺🇸", "exchange": "NASDAQ"},
-    "MSFT":    {"name": "Microsoft", "country": "🇺🇸", "exchange": "NASDAQ"},
-    "GOOGL":   {"name": "Alphabet (Google)", "country": "🇺🇸", "exchange": "NASDAQ"},
-    "AMZN":    {"name": "Amazon", "country": "🇺🇸", "exchange": "NASDAQ"},
-    "META":    {"name": "Meta Platforms", "country": "🇺🇸", "exchange": "NASDAQ"},
-    "AAPL":    {"name": "Apple", "country": "🇺🇸", "exchange": "NASDAQ"},
-    "NFLX":    {"name": "Netflix", "country": "🇺🇸", "exchange": "NASDAQ"},
-    "TSLA":    {"name": "Tesla", "country": "🇺🇸", "exchange": "NASDAQ"},
-    "AMD":     {"name": "Advanced Micro Devices", "country": "🇺🇸", "exchange": "NASDAQ"},
-    "CRM":     {"name": "Salesforce", "country": "🇺🇸", "exchange": "NYSE"},
-    "AVGO":    {"name": "Broadcom", "country": "🇺🇸", "exchange": "NASDAQ"},
-    # US Healthcare
-    "UNH":     {"name": "UnitedHealth Group", "country": "🇺🇸", "exchange": "NYSE"},
-    "JNJ":     {"name": "Johnson & Johnson", "country": "🇺🇸", "exchange": "NYSE"},
-    "LLY":     {"name": "Eli Lilly", "country": "🇺🇸", "exchange": "NYSE"},
-    # US Finance
-    "JPM":     {"name": "JPMorgan Chase", "country": "🇺🇸", "exchange": "NYSE"},
-    "V":       {"name": "Visa", "country": "🇺🇸", "exchange": "NYSE"},
-    # US Energy / Industrial
-    "XOM":     {"name": "ExxonMobil", "country": "🇺🇸", "exchange": "NYSE"},
-    "CAT":     {"name": "Caterpillar", "country": "🇺🇸", "exchange": "NYSE"},
-    "BA":      {"name": "Boeing", "country": "🇺🇸", "exchange": "NYSE"},
-    # US Consumer
-    "COST":    {"name": "Costco", "country": "🇺🇸", "exchange": "NASDAQ"},
-    "HD":      {"name": "Home Depot", "country": "🇺🇸", "exchange": "NYSE"},
-    # France - Euronext Paris
-    "MC.PA":   {"name": "LVMH", "country": "🇫🇷", "exchange": "Paris"},
-    "SU.PA":   {"name": "Schneider Electric", "country": "🇫🇷", "exchange": "Paris"},
-    "AIR.PA":  {"name": "Airbus", "country": "🇫🇷", "exchange": "Paris"},
-    "BNP.PA":  {"name": "BNP Paribas", "country": "🇫🇷", "exchange": "Paris"},
-    "SAF.PA":  {"name": "Safran", "country": "🇫🇷", "exchange": "Paris"},
-    "TTE.PA":  {"name": "TotalEnergies", "country": "🇫🇷", "exchange": "Paris"},
-    "OR.PA":   {"name": "L'Oréal", "country": "🇫🇷", "exchange": "Paris"},
-    # Europe - Other
-    "ASML.AS": {"name": "ASML Holding", "country": "🇳🇱", "exchange": "Amsterdam"},
-    "SAP.DE":  {"name": "SAP", "country": "🇩🇪", "exchange": "Frankfurt"},
-    "SIE.DE":  {"name": "Siemens", "country": "🇩🇪", "exchange": "Frankfurt"},
-}
+# ============================================================================
+# TICKER DATABASE — 78 tickers across 6 exchanges
+# ============================================================================
 
-# --- Sector mapping ---
-TICKER_SECTORS = {
-    # US Tech
-    "NVDA": "tech", "MSFT": "tech", "GOOGL": "tech", "AMZN": "tech",
-    "META": "tech", "AAPL": "tech", "NFLX": "tech", "TSLA": "tech",
-    "AMD": "tech", "CRM": "tech", "AVGO": "tech",
-    # US Healthcare
-    "UNH": "healthcare", "JNJ": "healthcare", "LLY": "healthcare",
-    # US Finance
-    "JPM": "finance", "V": "finance",
-    # US Energy / Industrial
-    "XOM": "energy", "CAT": "industrials", "BA": "aerospace",
-    # US Consumer
-    "COST": "consumer", "HD": "consumer",
-    # EU
-    "MC.PA": "luxury", "SU.PA": "materials", "AIR.PA": "industrials",
-    "BNP.PA": "finance", "SAF.PA": "aerospace", "TTE.PA": "energy",
-    "ASML.AS": "tech", "SAP.DE": "tech", "SIE.DE": "industrials",
-    "OR.PA": "consumer",
-}
+# Default watchlist params for tickers without custom thresholds
+_DEFAULT = {"t5d_threshold": 2.5, "rsi_threshold": 55, "require_sma200": True}
 
-# --- Watchlist ---
+# Full ticker registry: info + sector + description + watchlist params
+# fmt: off
+TICKERS = {
+    # ======================== NASDAQ ========================
+    "NVDA":    {"name": "NVIDIA",           "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "GPU, IA, data centers, gaming",                          "t5d": 4.0, "rsi": 50, "sma200": False},
+    "MSFT":    {"name": "Microsoft",        "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "Cloud Azure, Office 365, Windows, Xbox",                 "t5d": 1.5, "rsi": 55, "sma200": True},
+    "GOOGL":   {"name": "Alphabet (Google)","country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "Recherche, pub digitale, Cloud, YouTube, Waymo",         "t5d": 3.0, "rsi": 50, "sma200": True},
+    "AMZN":    {"name": "Amazon",           "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "E-commerce, AWS cloud, Alexa, streaming",                "t5d": 1.0, "rsi": 45, "sma200": False},
+    "META":    {"name": "Meta Platforms",   "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "Facebook, Instagram, WhatsApp, metavers",                "t5d": 1.0, "rsi": 50, "sma200": True},
+    "AAPL":    {"name": "Apple",            "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "iPhone, Mac, services (App Store, Apple TV+)",            "t5d": 3.5, "rsi": 50, "sma200": True},
+    "NFLX":    {"name": "Netflix",          "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "Streaming video, production de contenu original",         "t5d": 3.0, "rsi": 50, "sma200": True},
+    "TSLA":    {"name": "Tesla",            "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "Vehicules electriques, batteries, energie solaire",       "t5d": 5.0, "rsi": 50, "sma200": False},
+    "AMD":     {"name": "AMD",              "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "Processeurs CPU/GPU, serveurs, gaming",                  "t5d": 4.0, "rsi": 50, "sma200": False},
+    "AVGO":    {"name": "Broadcom",         "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "Semi-conducteurs, infrastructure reseau, logiciels",      "t5d": 3.0, "rsi": 50, "sma200": True},
+    "ADBE":    {"name": "Adobe",            "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "Creative Cloud, Photoshop, PDF, marketing digital",      },
+    "INTC":    {"name": "Intel",            "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "Processeurs x86, fonderies, IA embarquee",               },
+    "QCOM":    {"name": "Qualcomm",         "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "Puces mobiles Snapdragon, 5G, licences brevets",          },
+    "CSCO":    {"name": "Cisco",            "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "Equipements reseau, cybersecurite, collaboration",        },
+    "SHOP":    {"name": "Shopify",          "country": "🇺🇸", "exchange": "NASDAQ", "sector": "tech",       "desc": "Plateforme e-commerce SaaS pour marchands",               },
+    "COST":    {"name": "Costco",           "country": "🇺🇸", "exchange": "NASDAQ", "sector": "consumer",   "desc": "Entrepots de gros, club membership, alimentaire",         "t5d": 1.5, "rsi": 55, "sma200": True},
+    "SBUX":    {"name": "Starbucks",        "country": "🇺🇸", "exchange": "NASDAQ", "sector": "consumer",   "desc": "Chaine mondiale de cafes, boissons, restauration",        },
+    # ======================== NYSE ========================
+    "CRM":     {"name": "Salesforce",       "country": "🇺🇸", "exchange": "NYSE",   "sector": "tech",       "desc": "CRM cloud, automatisation ventes, IA Einstein",          "t5d": 2.0, "rsi": 55, "sma200": True},
+    "ORCL":    {"name": "Oracle",           "country": "🇺🇸", "exchange": "NYSE",   "sector": "tech",       "desc": "Bases de donnees, cloud OCI, ERP, applications",          },
+    "IBM":     {"name": "IBM",              "country": "🇺🇸", "exchange": "NYSE",   "sector": "tech",       "desc": "Cloud hybride, IA Watson, consulting, mainframes",        },
+    "UNH":     {"name": "UnitedHealth",     "country": "🇺🇸", "exchange": "NYSE",   "sector": "healthcare", "desc": "Assurance sante, gestion soins (Optum)",                  "t5d": 2.0, "rsi": 55, "sma200": True},
+    "JNJ":     {"name": "Johnson & Johnson","country": "🇺🇸", "exchange": "NYSE",   "sector": "healthcare", "desc": "Pharma, dispositifs medicaux, sante grand public",        "t5d": 1.5, "rsi": 60, "sma200": True},
+    "LLY":     {"name": "Eli Lilly",        "country": "🇺🇸", "exchange": "NYSE",   "sector": "healthcare", "desc": "Pharma (diabete, oncologie, Alzheimer, obesite)",         "t5d": 3.0, "rsi": 50, "sma200": True},
+    "ABBV":    {"name": "AbbVie",           "country": "🇺🇸", "exchange": "NYSE",   "sector": "healthcare", "desc": "Pharma (immunologie Humira, oncologie, esthetique)",       },
+    "PFE":     {"name": "Pfizer",           "country": "🇺🇸", "exchange": "NYSE",   "sector": "healthcare", "desc": "Pharma (vaccins, oncologie, anti-infectieux)",             },
+    "MRK":     {"name": "Merck",            "country": "🇺🇸", "exchange": "NYSE",   "sector": "healthcare", "desc": "Pharma (oncologie Keytruda, vaccins, sante animale)",      },
+    "TMO":     {"name": "Thermo Fisher",    "country": "🇺🇸", "exchange": "NYSE",   "sector": "healthcare", "desc": "Instruments scientifiques, diagnostics, biotech",          },
+    "JPM":     {"name": "JPMorgan Chase",   "country": "🇺🇸", "exchange": "NYSE",   "sector": "finance",    "desc": "Banque universelle, investment banking, asset mgmt",       "t5d": 2.0, "rsi": 55, "sma200": True},
+    "V":       {"name": "Visa",             "country": "🇺🇸", "exchange": "NYSE",   "sector": "finance",    "desc": "Reseau de paiement mondial, cartes, fintech",             "t5d": 1.5, "rsi": 55, "sma200": True},
+    "GS":      {"name": "Goldman Sachs",    "country": "🇺🇸", "exchange": "NYSE",   "sector": "finance",    "desc": "Investment banking, trading, asset management",            },
+    "BAC":     {"name": "Bank of America",  "country": "🇺🇸", "exchange": "NYSE",   "sector": "finance",    "desc": "Banque retail, wealth management, trading",                },
+    "MA":      {"name": "Mastercard",       "country": "🇺🇸", "exchange": "NYSE",   "sector": "finance",    "desc": "Reseau de paiement mondial, cybersecurite paiements",      },
+    "BLK":     {"name": "BlackRock",        "country": "🇺🇸", "exchange": "NYSE",   "sector": "finance",    "desc": "Gestion d'actifs #1 mondial, iShares ETF, Aladdin",        },
+    "XOM":     {"name": "ExxonMobil",       "country": "🇺🇸", "exchange": "NYSE",   "sector": "energy",     "desc": "Petrole, gaz naturel, raffinage, chimie",                 "t5d": 3.0, "rsi": 55, "sma200": False},
+    "CVX":     {"name": "Chevron",          "country": "🇺🇸", "exchange": "NYSE",   "sector": "energy",     "desc": "Petrole, gaz, LNG, energies renouvelables",               },
+    "CAT":     {"name": "Caterpillar",      "country": "🇺🇸", "exchange": "NYSE",   "sector": "industrials","desc": "Engins BTP, mines, moteurs, equipements lourds",           "t5d": 2.5, "rsi": 55, "sma200": True},
+    "BA":      {"name": "Boeing",           "country": "🇺🇸", "exchange": "NYSE",   "sector": "aerospace",  "desc": "Avions commerciaux, defense, espace",                     "t5d": 4.0, "rsi": 50, "sma200": False},
+    "GE":      {"name": "GE Aerospace",     "country": "🇺🇸", "exchange": "NYSE",   "sector": "aerospace",  "desc": "Moteurs d'avion, maintenance aeronautique",               },
+    "LMT":     {"name": "Lockheed Martin",  "country": "🇺🇸", "exchange": "NYSE",   "sector": "aerospace",  "desc": "Defense (F-35, missiles, espace, cyber)",                 },
+    "RTX":     {"name": "RTX (Raytheon)",   "country": "🇺🇸", "exchange": "NYSE",   "sector": "aerospace",  "desc": "Defense (Pratt&Whitney, missiles, radars)",                },
+    "DE":      {"name": "John Deere",       "country": "🇺🇸", "exchange": "NYSE",   "sector": "industrials","desc": "Machines agricoles, forestieres, BTP",                     },
+    "UPS":     {"name": "UPS",              "country": "🇺🇸", "exchange": "NYSE",   "sector": "industrials","desc": "Livraison colis, logistique, supply chain",                },
+    "HD":      {"name": "Home Depot",       "country": "🇺🇸", "exchange": "NYSE",   "sector": "consumer",   "desc": "Magasins bricolage/amenagement, B2B pro",                 "t5d": 2.0, "rsi": 55, "sma200": True},
+    "WMT":     {"name": "Walmart",          "country": "🇺🇸", "exchange": "NYSE",   "sector": "consumer",   "desc": "Distribution #1 mondial, e-commerce, Sam's Club",         },
+    "PG":      {"name": "Procter & Gamble", "country": "🇺🇸", "exchange": "NYSE",   "sector": "consumer",   "desc": "Hygiene, lessive, beaute (Pampers, Gillette, Oral-B)",    },
+    "KO":      {"name": "Coca-Cola",        "country": "🇺🇸", "exchange": "NYSE",   "sector": "consumer",   "desc": "Boissons (Coca, Fanta, Sprite, Minute Maid)",             },
+    "MCD":     {"name": "McDonald's",       "country": "🇺🇸", "exchange": "NYSE",   "sector": "consumer",   "desc": "Restauration rapide, franchise mondiale",                 },
+    "NKE":     {"name": "Nike",             "country": "🇺🇸", "exchange": "NYSE",   "sector": "consumer",   "desc": "Chaussures, vetements sportifs, Jordan, Converse",        },
+    "DIS":     {"name": "Disney",           "country": "🇺🇸", "exchange": "NYSE",   "sector": "consumer",   "desc": "Parcs, streaming Disney+, studios (Marvel, Pixar, Star Wars)", },
+    # ======================== EURONEXT PARIS ========================
+    "MC.PA":   {"name": "LVMH",              "country": "🇫🇷", "exchange": "Paris",  "sector": "luxury",     "desc": "Luxe (Louis Vuitton, Dior, Hennessy, Sephora)",           "t5d": 3.5, "rsi": 60, "sma200": False},
+    "SU.PA":   {"name": "Schneider Electric","country": "🇫🇷", "exchange": "Paris",  "sector": "industrials","desc": "Gestion energie, automatisation industrielle, IoT",        "t5d": 4.0, "rsi": 55, "sma200": True},
+    "AIR.PA":  {"name": "Airbus",            "country": "🇫🇷", "exchange": "Paris",  "sector": "aerospace",  "desc": "Avions commerciaux A320/A350, helicopteres, espace",      "t5d": 3.5, "rsi": 65, "sma200": False},
+    "BNP.PA":  {"name": "BNP Paribas",       "country": "🇫🇷", "exchange": "Paris",  "sector": "finance",    "desc": "Banque universelle (retail, corporate, asset mgmt)",       "t5d": 2.5, "rsi": 50, "sma200": False},
+    "SAF.PA":  {"name": "Safran",            "country": "🇫🇷", "exchange": "Paris",  "sector": "aerospace",  "desc": "Moteurs d'avion LEAP, equipements, defense",              "t5d": 2.0, "rsi": 50, "sma200": True},
+    "TTE.PA":  {"name": "TotalEnergies",     "country": "🇫🇷", "exchange": "Paris",  "sector": "energy",     "desc": "Petrole, gaz, electricite, renouvelables",                "t5d": 3.5, "rsi": 55, "sma200": False},
+    "OR.PA":   {"name": "L'Oréal",           "country": "🇫🇷", "exchange": "Paris",  "sector": "consumer",   "desc": "Cosmetiques #1 mondial (Lancome, Garnier, Maybelline)",   "t5d": 2.0, "rsi": 55, "sma200": True},
+    "AI.PA":   {"name": "Air Liquide",       "country": "🇫🇷", "exchange": "Paris",  "sector": "materials",  "desc": "Gaz industriels, medicaux, hydrogene",                    },
+    "DG.PA":   {"name": "Vinci",             "country": "🇫🇷", "exchange": "Paris",  "sector": "industrials","desc": "Concessions (autoroutes, aeroports), BTP, energie",        },
+    "KER.PA":  {"name": "Kering",            "country": "🇫🇷", "exchange": "Paris",  "sector": "luxury",     "desc": "Luxe (Gucci, Saint Laurent, Bottega Veneta, Balenciaga)", },
+    "SAN.PA":  {"name": "Sanofi",            "country": "🇫🇷", "exchange": "Paris",  "sector": "healthcare", "desc": "Pharma (Dupixent, vaccins, maladies rares)",               },
+    "EL.PA":   {"name": "EssilorLuxottica",  "country": "🇫🇷", "exchange": "Paris",  "sector": "healthcare", "desc": "Verres optiques, lunettes (Ray-Ban, Oakley)",              },
+    # ======================== XETRA FRANKFURT ========================
+    "SAP.DE":  {"name": "SAP",               "country": "🇩🇪", "exchange": "Frankfurt","sector": "tech",     "desc": "ERP, cloud business, gestion d'entreprise",               "t5d": 2.0, "rsi": 55, "sma200": True},
+    "SIE.DE":  {"name": "Siemens",           "country": "🇩🇪", "exchange": "Frankfurt","sector": "industrials","desc": "Automatisation, trains, infrastructure, sante",           "t5d": 2.5, "rsi": 55, "sma200": True},
+    "DTE.DE":  {"name": "Deutsche Telekom",  "country": "🇩🇪", "exchange": "Frankfurt","sector": "telecom",   "desc": "Telecoms (T-Mobile US), fibre, 5G",                      },
+    "ALV.DE":  {"name": "Allianz",           "country": "🇩🇪", "exchange": "Frankfurt","sector": "finance",   "desc": "Assurance, asset management (PIMCO)",                     },
+    "BAS.DE":  {"name": "BASF",              "country": "🇩🇪", "exchange": "Frankfurt","sector": "materials", "desc": "Chimie #1 mondial, materiaux, agriculture",                },
+    "ADS.DE":  {"name": "Adidas",            "country": "🇩🇪", "exchange": "Frankfurt","sector": "consumer",  "desc": "Chaussures et vetements sportifs",                        },
+    "MUV2.DE": {"name": "Munich Re",         "country": "🇩🇪", "exchange": "Frankfurt","sector": "finance",   "desc": "Reassurance #1 mondial, gestion des risques",             },
+    # ======================== EURONEXT AMSTERDAM ========================
+    "ASML.AS": {"name": "ASML Holding",      "country": "🇳🇱", "exchange": "Amsterdam","sector": "tech",     "desc": "Machines lithographie EUV pour semi-conducteurs",          "t5d": 3.5, "rsi": 50, "sma200": True},
+    "PHIA.AS": {"name": "Philips",           "country": "🇳🇱", "exchange": "Amsterdam","sector": "healthcare","desc": "Imagerie medicale, monitoring, sante connectee",           },
+    "INGA.AS": {"name": "ING Group",         "country": "🇳🇱", "exchange": "Amsterdam","sector": "finance",   "desc": "Banque digitale, retail banking, wholesale",              },
+    "AD.AS":   {"name": "Ahold Delhaize",    "country": "🇳🇱", "exchange": "Amsterdam","sector": "consumer",  "desc": "Distribution alimentaire (Albert Heijn, Delhaize, US)",   },
+    # ======================== SIX ZURICH ========================
+    "NESN.SW": {"name": "Nestlé",            "country": "🇨🇭", "exchange": "Zurich",  "sector": "consumer",  "desc": "Alimentaire #1 mondial (Nespresso, KitKat, Purina)",      },
+    "NOVN.SW": {"name": "Novartis",          "country": "🇨🇭", "exchange": "Zurich",  "sector": "healthcare","desc": "Pharma (cardiologie, oncologie, immunologie, generiques)", },
+    "ROG.SW":  {"name": "Roche",             "country": "🇨🇭", "exchange": "Zurich",  "sector": "healthcare","desc": "Pharma (oncologie, diagnostics, anticorps monoclonaux)",   },
+    # ======================== LSE LONDON ========================
+    "SHEL.L":  {"name": "Shell",             "country": "🇬🇧", "exchange": "London",  "sector": "energy",    "desc": "Petrole, gaz, LNG, transition energetique",               },
+    "AZN.L":   {"name": "AstraZeneca",       "country": "🇬🇧", "exchange": "London",  "sector": "healthcare","desc": "Pharma (oncologie, respiratoire, vaccins, rare diseases)", },
+    "HSBA.L":  {"name": "HSBC",              "country": "🇬🇧", "exchange": "London",  "sector": "finance",   "desc": "Banque mondiale, Asie-Pacifique, trade finance",          },
+}
+# fmt: on
+
+# --- Derived lookups ---
+
+TICKER_INFO = {t: {"name": d["name"], "country": d["country"], "exchange": d["exchange"]} for t, d in TICKERS.items()}
+TICKER_SECTORS = {t: d["sector"] for t, d in TICKERS.items()}
+TICKER_DESCRIPTION = {t: d.get("desc", "") for t, d in TICKERS.items()}
+
 WATCHLIST = {
-    # --- US Tech ---
-    "NVDA":   {"market": "US", "t5d_threshold": 4.0, "rsi_threshold": 50, "require_sma200": False},
-    "MSFT":   {"market": "US", "t5d_threshold": 1.5, "rsi_threshold": 55, "require_sma200": True},
-    "GOOGL":  {"market": "US", "t5d_threshold": 3.0, "rsi_threshold": 50, "require_sma200": True},
-    "AMZN":   {"market": "US", "t5d_threshold": 1.0, "rsi_threshold": 45, "require_sma200": False},
-    "META":   {"market": "US", "t5d_threshold": 1.0, "rsi_threshold": 50, "require_sma200": True},
-    "AAPL":   {"market": "US", "t5d_threshold": 3.5, "rsi_threshold": 50, "require_sma200": True},
-    "NFLX":   {"market": "US", "t5d_threshold": 3.0, "rsi_threshold": 50, "require_sma200": True},
-    "TSLA":   {"market": "US", "t5d_threshold": 5.0, "rsi_threshold": 50, "require_sma200": False},
-    "AMD":    {"market": "US", "t5d_threshold": 4.0, "rsi_threshold": 50, "require_sma200": False},
-    "CRM":    {"market": "US", "t5d_threshold": 2.0, "rsi_threshold": 55, "require_sma200": True},
-    "AVGO":   {"market": "US", "t5d_threshold": 3.0, "rsi_threshold": 50, "require_sma200": True},
-    # --- US Healthcare ---
-    "UNH":    {"market": "US", "t5d_threshold": 2.0, "rsi_threshold": 55, "require_sma200": True},
-    "JNJ":    {"market": "US", "t5d_threshold": 1.5, "rsi_threshold": 60, "require_sma200": True},
-    "LLY":    {"market": "US", "t5d_threshold": 3.0, "rsi_threshold": 50, "require_sma200": True},
-    # --- US Finance ---
-    "JPM":    {"market": "US", "t5d_threshold": 2.0, "rsi_threshold": 55, "require_sma200": True},
-    "V":      {"market": "US", "t5d_threshold": 1.5, "rsi_threshold": 55, "require_sma200": True},
-    # --- US Energy / Industrial ---
-    "XOM":    {"market": "US", "t5d_threshold": 3.0, "rsi_threshold": 55, "require_sma200": False},
-    "CAT":    {"market": "US", "t5d_threshold": 2.5, "rsi_threshold": 55, "require_sma200": True},
-    "BA":     {"market": "US", "t5d_threshold": 4.0, "rsi_threshold": 50, "require_sma200": False},
-    # --- US Consumer ---
-    "COST":   {"market": "US", "t5d_threshold": 1.5, "rsi_threshold": 55, "require_sma200": True},
-    "HD":     {"market": "US", "t5d_threshold": 2.0, "rsi_threshold": 55, "require_sma200": True},
-    # --- EU ---
-    "MC.PA":  {"market": "FR", "t5d_threshold": 3.5, "rsi_threshold": 60, "require_sma200": False},
-    "SU.PA":  {"market": "FR", "t5d_threshold": 4.0, "rsi_threshold": 55, "require_sma200": True},
-    "AIR.PA": {"market": "FR", "t5d_threshold": 3.5, "rsi_threshold": 65, "require_sma200": False},
-    "BNP.PA": {"market": "FR", "t5d_threshold": 2.5, "rsi_threshold": 50, "require_sma200": False},
-    "SAF.PA": {"market": "FR", "t5d_threshold": 2.0, "rsi_threshold": 50, "require_sma200": True},
-    "TTE.PA": {"market": "FR", "t5d_threshold": 3.5, "rsi_threshold": 55, "require_sma200": False},
-    "ASML.AS": {"market": "FR", "t5d_threshold": 3.5, "rsi_threshold": 50, "require_sma200": True},
-    "SAP.DE": {"market": "FR", "t5d_threshold": 2.0, "rsi_threshold": 55, "require_sma200": True},
-    "SIE.DE": {"market": "FR", "t5d_threshold": 2.5, "rsi_threshold": 55, "require_sma200": True},
-    "OR.PA":  {"market": "FR", "t5d_threshold": 2.0, "rsi_threshold": 55, "require_sma200": True},
+    t: {
+        "market": d["exchange"],
+        "t5d_threshold": d.get("t5d", _DEFAULT["t5d_threshold"]),
+        "rsi_threshold": d.get("rsi", _DEFAULT["rsi_threshold"]),
+        "require_sma200": d.get("sma200", _DEFAULT["require_sma200"]),
+    }
+    for t, d in TICKERS.items()
 }
+
+EXCHANGE_GROUPS = {}
+for t, d in TICKERS.items():
+    ex = d["exchange"]
+    EXCHANGE_GROUPS.setdefault(ex, []).append(t)

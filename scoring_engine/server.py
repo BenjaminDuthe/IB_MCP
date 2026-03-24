@@ -27,14 +27,10 @@ scheduler = AsyncIOScheduler(timezone="Europe/Paris")
 
 # --- Scheduled jobs ---
 
-async def job_scan_eu():
-    logger.info("Scheduled: EU market scan")
-    await scan_market("FR")
-
-
-async def job_scan_us():
-    logger.info("Scheduled: US market scan")
-    await scan_market("US")
+async def _scan_exchange(exchange: str):
+    from scoring_engine.pipeline import scan_exchange
+    logger.info("Scheduled: %s scan", exchange)
+    await scan_exchange(exchange)
 
 
 async def job_daily_summary():
@@ -44,28 +40,32 @@ async def job_daily_summary():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # EU market: Mon-Fri 9:00-17:30 CET, every 30min
-    scheduler.add_job(
-        job_scan_eu, CronTrigger(
-            day_of_week="mon-fri", hour="9-17", minute="0,30",
-            timezone="Europe/Paris",
-        ),
-        id="scan_eu",
-    )
-    # US market: Mon-Fri 15:30-22:00 CET, every 30min
-    scheduler.add_job(
-        job_scan_us, CronTrigger(
-            day_of_week="mon-fri", hour="15-21", minute="0,30",
-            timezone="Europe/Paris",
-        ),
-        id="scan_us",
-    )
+    # EU exchanges at open (Mon-Fri, CET)
+    for exchange, minute in [("Paris", 0), ("Frankfurt", 5), ("Amsterdam", 10), ("Zurich", 15), ("London", 20)]:
+        scheduler.add_job(
+            _scan_exchange, CronTrigger(day_of_week="mon-fri", hour=9, minute=minute, timezone="Europe/Paris"),
+            args=[exchange], id=f"scan_{exchange.lower()}",
+        )
+    # EU rescans at 12:00 and 16:00 CET
+    for hour in [12, 16]:
+        for exchange, minute in [("Paris", 0), ("Frankfurt", 5), ("Amsterdam", 10), ("Zurich", 15), ("London", 20)]:
+            scheduler.add_job(
+                _scan_exchange, CronTrigger(day_of_week="mon-fri", hour=hour, minute=minute, timezone="Europe/Paris"),
+                args=[exchange], id=f"scan_{exchange.lower()}_{hour}h",
+            )
+    # US exchanges (NYSE + NASDAQ) at open 15:30 CET, then 18:00, 20:30
+    for hour, minute in [(15, 30), (18, 0), (20, 30)]:
+        scheduler.add_job(
+            _scan_exchange, CronTrigger(day_of_week="mon-fri", hour=hour, minute=minute, timezone="Europe/Paris"),
+            args=["NYSE"], id=f"scan_nyse_{hour}h{minute:02d}",
+        )
+        scheduler.add_job(
+            _scan_exchange, CronTrigger(day_of_week="mon-fri", hour=hour, minute=minute + 5, timezone="Europe/Paris"),
+            args=["NASDAQ"], id=f"scan_nasdaq_{hour}h{minute + 5:02d}",
+        )
     # Daily summary: Mon-Fri 22:30 CET
     scheduler.add_job(
-        job_daily_summary, CronTrigger(
-            day_of_week="mon-fri", hour=22, minute=30,
-            timezone="Europe/Paris",
-        ),
+        job_daily_summary, CronTrigger(day_of_week="mon-fri", hour=22, minute=30, timezone="Europe/Paris"),
         id="daily_summary",
     )
     # Weekly performance report: Friday 22:45 CET
