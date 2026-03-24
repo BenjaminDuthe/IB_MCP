@@ -228,9 +228,10 @@ async def alert_scan_summary(market: str, results: list[dict], openclaw_verdicts
 
     # --- MESSAGE 2: Top 5 detailed embeds ---
     # Only show detailed cards for BUY verdicts
-    buy_results = [r for r in valid if r.get("llm", {}).get("verdict") == "BUY"]
+    buy_results = [r for r in valid if r.get("llm", {}).get("verdict") == "BUY" and r.get("llm", {}).get("confidence", 0) >= 60]
     if not buy_results:
-        return  # No BUY = no detailed cards
+        return  # No BUY with conviction >= 60% = no detailed cards
+
     embeds = []
     for rank, r in enumerate(buy_results, 1):
         s = r["score"]
@@ -241,79 +242,127 @@ async def alert_scan_summary(market: str, results: list[dict], openclaw_verdicts
         flag = info.get("country", "")
         exchange = info.get("exchange", "")
         sector = TICKER_SECTORS.get(ticker, "")
-        verdict = l.get("verdict", "?")
+        company_desc = TICKER_DESCRIPTION.get(ticker, "")
         conf = l.get("confidence", 0)
         price = s.get("price", 0)
         score = s.get("score", 0)
-        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"#{rank}")
 
-        v_emoji = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡"}.get(verdict, "⚪")
-        color = {"BUY": COLOR_BUY, "SELL": COLOR_SELL, "HOLD": COLOR_HOLD}.get(verdict, COLOR_INFO)
-
-        company_desc = TICKER_DESCRIPTION.get(ticker, "")
-        desc = f"📍 {exchange} • {sector.title()}\n"
-        if company_desc:
-            desc += f"*{company_desc}*\n"
-        desc += f"\n{v_emoji} **{verdict}** ({conf}%) | Score **{score}/5** | ${price:.2f}"
+        # Description: company info + verdict
+        desc = f"*{company_desc}*\n" if company_desc else ""
+        desc += f"📍 {exchange} • {sector.title()}\n\n"
+        desc += f"🟢 **ACHAT recommandé** ({conf}%) | Score {score}/5 | ${price:.2f}"
 
         fields = []
 
-        # Analyst scores
+        # Analyst scores (vulgarisé)
         reports = r.get("analyst_reports", [])
         if reports:
             scores_map = {a["agent_name"]: a for a in reports}
+            tech_s = scores_map.get("technical", {}).get("score", 0)
+            fund_s = scores_map.get("fundamental", {}).get("score", 0)
+            macro_s = scores_map.get("macro", {}).get("score", 0)
+            sent_s = scores_map.get("sentiment", {}).get("score", 0)
+
+            def _label(s):
+                if s >= 0.5: return "très positive"
+                if s >= 0.1: return "positive"
+                if s > -0.1: return "neutre"
+                if s > -0.5: return "négative"
+                return "très négative"
+
             fields.append({
-                "name": "Analystes",
+                "name": "📊 Nos 4 analystes",
                 "value": (
-                    f"📊 Tech: **{scores_map.get('technical', {}).get('score', 0):+.1f}** | "
-                    f"📈 Fond: **{scores_map.get('fundamental', {}).get('score', 0):+.1f}** | "
-                    f"🌍 Macro: **{scores_map.get('macro', {}).get('score', 0):+.1f}** | "
-                    f"💬 Sent: **{scores_map.get('sentiment', {}).get('score', 0):+.1f}**"
+                    f"📊 Analyse technique : {_label(tech_s)} ({tech_s:+.1f})\n"
+                    f"📈 Santé financière : {_label(fund_s)} ({fund_s:+.1f})\n"
+                    f"🌍 Contexte économique : {_label(macro_s)} ({macro_s:+.1f})\n"
+                    f"💬 Opinion du marché : {_label(sent_s)} ({sent_s:+.1f})"
                 ),
                 "inline": False,
             })
 
-        # Fundamentals
+        # Fundamentals (vulgarisé)
         for a in reports:
             if a.get("agent_name") == "fundamental" and a.get("metrics"):
                 m = a["metrics"]
                 parts = []
-                if m.get("forward_pe"): parts.append(f"P/E {m['forward_pe']:.0f}")
-                if m.get("revenue_growth") is not None: parts.append(f"CA {m['revenue_growth']*100:+.0f}%")
-                if m.get("profit_margin") is not None: parts.append(f"Marge {m['profit_margin']*100:.0f}%")
-                if m.get("analyst_upside") is not None: parts.append(f"Cible {m['analyst_upside']:+.0f}%")
+                if m.get("forward_pe"):
+                    parts.append(f"Le cours vaut {m['forward_pe']:.0f}× les bénéfices")
+                if m.get("revenue_growth") is not None:
+                    parts.append(f"Chiffre d'affaires {m['revenue_growth']*100:+.0f}%")
+                if m.get("profit_margin") is not None:
+                    parts.append(f"Marge bénéficiaire {m['profit_margin']*100:.0f}%")
+                # Target price avec horizon
+                target = r.get("openclaw_target_price")
+                horizon = r.get("openclaw_horizon", "")
+                if target and price > 0:
+                    upside = (target - price) / price * 100
+                    target_text = f"Les analystes visent ${target:.0f} ({upside:+.0f}%)"
+                    if horizon:
+                        target_text += f"\n⏱️ {horizon}"
+                    parts.append(target_text)
+                elif m.get("analyst_upside") is not None:
+                    parts.append(f"Les analystes visent {m['analyst_upside']:+.0f}% de hausse")
                 if parts:
-                    fields.append({"name": "📈 Fondamentaux", "value": " | ".join(parts), "inline": False})
+                    fields.append({"name": "📈 Chiffres clés", "value": "\n".join(parts), "inline": False})
 
-        # Technicals + filters
+        # Technicals (vulgarisé)
         vals = s.get("values", {})
         filters = s.get("filters", {})
-        tech_parts = []
-        if vals.get("rsi_14") is not None: tech_parts.append(f"RSI {vals['rsi_14']:.0f}")
-        if vals.get("trend_5d") is not None: tech_parts.append(f"5j {vals['trend_5d']:+.1f}%")
+        tech_lines = []
+        rsi = vals.get("rsi_14")
+        if rsi is not None:
+            if rsi > 70: rsi_label = "suracheté (attention)"
+            elif rsi < 30: rsi_label = "survendu (opportunité ?)"
+            else: rsi_label = "zone neutre"
+            tech_lines.append(f"RSI {rsi:.0f} — {rsi_label}")
+        trend = vals.get("trend_5d")
+        if trend is not None:
+            tech_lines.append(f"L'action a {'pris' if trend > 0 else 'perdu'} {abs(trend):.1f}% sur 5 jours")
         if filters:
-            tech_parts.append(" ".join("✅" if v else "❌" for v in filters.values()))
-        if tech_parts:
-            fields.append({"name": "📊 Technique", "value": " | ".join(tech_parts), "inline": False})
+            filter_labels = {
+                "price_above_sma20": "Au-dessus de sa moyenne 20 jours",
+                "trend_5d_positive": "Tendance 5 jours positive",
+                "rsi_below_threshold": "Pas en zone de surachat",
+                "price_above_sma200": "Au-dessus de sa moyenne 200 jours",
+                "atr_relative_ok": "Volatilité maîtrisée",
+            }
+            for k, v in filters.items():
+                label = filter_labels.get(k, k)
+                tech_lines.append(f"{'✅' if v else '❌'} {label}")
+        if tech_lines:
+            fields.append({"name": "📊 Signaux techniques", "value": "\n".join(tech_lines), "inline": False})
 
-        # OpenClaw reason + risk
+        # Bull case
+        bull = r.get("bull_case", "")
+        if bull:
+            fields.append({"name": "🐂 Pourquoi acheter ?", "value": bull[:250], "inline": False})
+
+        # Bear case
+        bear = r.get("bear_case", "")
+        if bear:
+            fields.append({"name": "🐻 Pourquoi hésiter ?", "value": bear[:250], "inline": False})
+
+        # Verdict
         reason = l.get("summary", "")
-        risk_text = r.get("openclaw_risk", "")
         if reason:
-            fields.append({"name": "💡 Verdict", "value": reason[:200], "inline": False})
+            fields.append({"name": "💡 Verdict", "value": reason[:300], "inline": False})
+
+        # Risk
+        risk_text = r.get("openclaw_risk", "")
         if risk_text:
-            fields.append({"name": "⚠️ Risque", "value": risk_text[:150], "inline": False})
+            fields.append({"name": "⚠️ À surveiller", "value": risk_text[:200], "inline": False})
 
         embeds.append({
-            "title": f"{medal} {name} ({ticker}) {flag}",
+            "title": f"🟢 {name} ({ticker}) {flag}",
             "description": desc,
-            "color": color,
-            "fields": fields[:8],
+            "color": COLOR_BUY,
+            "fields": fields[:10],
         })
 
     if embeds:
         embeds[-1]["timestamp"] = datetime.utcnow().isoformat()
-        embeds[-1]["footer"] = {"text": f"Trading Agent v2 | {market} — {len(buy_results)} BUY signal(s) | OpenClaw"}
+        embeds[-1]["footer"] = {"text": f"Trading Agent v2 | {market} — {len(buy_results)} achat(s) recommandé(s)"}
         await send_discord_embed(embeds)
 
 

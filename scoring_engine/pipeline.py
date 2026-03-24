@@ -161,6 +161,8 @@ async def scan_tickers(tickers: list[str]) -> dict:
                     r["openclaw_rank"] = v.get("rank", 99)
                     r["bull_case"] = v.get("bull_case", "")
                     r["bear_case"] = v.get("bear_case", "")
+                    r["openclaw_target_price"] = v.get("target_price")
+                    r["openclaw_horizon"] = v.get("horizon", "")
 
     # Risk gate + signal detection
     for r in results:
