@@ -57,6 +57,48 @@ DRAWDOWN_REDUCE_THRESHOLD = float(os.environ.get("DRAWDOWN_REDUCE_THRESHOLD", "5
 # --- Performance tracking ---
 WIN_RATE_DRIFT_THRESHOLD = float(os.environ.get("WIN_RATE_DRIFT_THRESHOLD", "0.60"))
 
+# --- Ticker metadata (name, country, exchange) ---
+TICKER_INFO = {
+    # US Tech
+    "NVDA":    {"name": "NVIDIA", "country": "🇺🇸", "exchange": "NASDAQ"},
+    "MSFT":    {"name": "Microsoft", "country": "🇺🇸", "exchange": "NASDAQ"},
+    "GOOGL":   {"name": "Alphabet (Google)", "country": "🇺🇸", "exchange": "NASDAQ"},
+    "AMZN":    {"name": "Amazon", "country": "🇺🇸", "exchange": "NASDAQ"},
+    "META":    {"name": "Meta Platforms", "country": "🇺🇸", "exchange": "NASDAQ"},
+    "AAPL":    {"name": "Apple", "country": "🇺🇸", "exchange": "NASDAQ"},
+    "NFLX":    {"name": "Netflix", "country": "🇺🇸", "exchange": "NASDAQ"},
+    "TSLA":    {"name": "Tesla", "country": "🇺🇸", "exchange": "NASDAQ"},
+    "AMD":     {"name": "Advanced Micro Devices", "country": "🇺🇸", "exchange": "NASDAQ"},
+    "CRM":     {"name": "Salesforce", "country": "🇺🇸", "exchange": "NYSE"},
+    "AVGO":    {"name": "Broadcom", "country": "🇺🇸", "exchange": "NASDAQ"},
+    # US Healthcare
+    "UNH":     {"name": "UnitedHealth Group", "country": "🇺🇸", "exchange": "NYSE"},
+    "JNJ":     {"name": "Johnson & Johnson", "country": "🇺🇸", "exchange": "NYSE"},
+    "LLY":     {"name": "Eli Lilly", "country": "🇺🇸", "exchange": "NYSE"},
+    # US Finance
+    "JPM":     {"name": "JPMorgan Chase", "country": "🇺🇸", "exchange": "NYSE"},
+    "V":       {"name": "Visa", "country": "🇺🇸", "exchange": "NYSE"},
+    # US Energy / Industrial
+    "XOM":     {"name": "ExxonMobil", "country": "🇺🇸", "exchange": "NYSE"},
+    "CAT":     {"name": "Caterpillar", "country": "🇺🇸", "exchange": "NYSE"},
+    "BA":      {"name": "Boeing", "country": "🇺🇸", "exchange": "NYSE"},
+    # US Consumer
+    "COST":    {"name": "Costco", "country": "🇺🇸", "exchange": "NASDAQ"},
+    "HD":      {"name": "Home Depot", "country": "🇺🇸", "exchange": "NYSE"},
+    # France - Euronext Paris
+    "MC.PA":   {"name": "LVMH", "country": "🇫🇷", "exchange": "Paris"},
+    "SU.PA":   {"name": "Schneider Electric", "country": "🇫🇷", "exchange": "Paris"},
+    "AIR.PA":  {"name": "Airbus", "country": "🇫🇷", "exchange": "Paris"},
+    "BNP.PA":  {"name": "BNP Paribas", "country": "🇫🇷", "exchange": "Paris"},
+    "SAF.PA":  {"name": "Safran", "country": "🇫🇷", "exchange": "Paris"},
+    "TTE.PA":  {"name": "TotalEnergies", "country": "🇫🇷", "exchange": "Paris"},
+    "OR.PA":   {"name": "L'Oréal", "country": "🇫🇷", "exchange": "Paris"},
+    # Europe - Other
+    "ASML.AS": {"name": "ASML Holding", "country": "🇳🇱", "exchange": "Amsterdam"},
+    "SAP.DE":  {"name": "SAP", "country": "🇩🇪", "exchange": "Frankfurt"},
+    "SIE.DE":  {"name": "Siemens", "country": "🇩🇪", "exchange": "Frankfurt"},
+}
+
 # --- Sector mapping ---
 TICKER_SECTORS = {
     # US Tech

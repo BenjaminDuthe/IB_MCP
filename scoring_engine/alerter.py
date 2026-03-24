@@ -168,12 +168,19 @@ async def alert_signal(
 
 
 async def alert_scan_summary(market: str, results: list[dict]) -> None:
-    """Send rich market scan summary to Discord — one embed per ticker."""
+    """Send rich market scan summary to Discord — ranked, with full company info."""
+    from scoring_engine.config import TICKER_INFO, TICKER_SECTORS
+
+    # Filter valid results and sort by score descending (ranking)
+    valid = [r for r in results if not r.get("error") and r.get("score")]
+    valid.sort(key=lambda r: (r["score"]["score"], r.get("llm", {}).get("confidence", 0)), reverse=True)
+
+    if not valid:
+        return
+
     embeds = []
-    for r in results:
-        if r.get("error"):
-            continue
-        s = r.get("score", {})
+    for rank, r in enumerate(valid, 1):
+        s = r["score"]
         l = r.get("llm", {})
         db = r.get("debate", {})
         reports = r.get("analyst_reports", [])
@@ -184,88 +191,102 @@ async def alert_scan_summary(market: str, results: list[dict]) -> None:
         conf = l.get("confidence", 0)
         ticker = s.get("ticker", "?")
 
-        emoji = "🟢" if score >= 4 else ("🟡" if score >= 3 else "⚪")
+        # Company metadata
+        info = TICKER_INFO.get(ticker, {})
+        name = info.get("name", ticker)
+        flag = info.get("country", "")
+        exchange = info.get("exchange", "")
+        sector = TICKER_SECTORS.get(ticker, "")
+
+        # Rank medal
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"#{rank}")
+
+        # Verdict emoji + color
+        v_emoji = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡"}.get(verdict, "⚪")
         color = {"BUY": COLOR_BUY, "SELL": COLOR_SELL, "HOLD": COLOR_HOLD}.get(verdict, COLOR_INFO)
 
-        # Build description with analysts
-        desc_parts = [f"**{verdict}** ({conf}%) | Score **{score}/5** | ${price:.2f}"]
-        if reports:
-            agent_line = " | ".join(
-                f"{'📊📈🌍💬'['tfsm'.index(a['agent_name'][0])]} {a['score']:+.2f}"
-                if a['agent_name'][0] in 'tfsm' else f"{a['agent_name']}: {a['score']:+.2f}"
-                for a in reports
-            )
-            desc_parts.append(agent_line)
+        # Title: rank + company name + flag
+        title = f"{medal} {name} ({ticker}) {flag}"
+
+        # Description: verdict + price + exchange + sector
+        desc = f"{v_emoji} **{verdict}** ({conf}%) | Score **{score}/5** | ${price:.2f}\n"
+        desc += f"📍 {exchange} | {sector.title()}"
 
         fields = []
 
-        # Filters compact
-        filters = s.get("filters", {})
-        if filters:
-            f_line = " ".join(
-                ("✅" if v else "❌") + k.replace("price_above_", "").replace("_positive", "").replace("_below_threshold", "").replace("_ok", "").replace("_relative", "").upper()[:5]
-                for k, v in filters.items()
-            )
-            fields.append({"name": "Filtres", "value": f_line, "inline": True})
-
-        # Key fundamentals
-        for a in reports:
-            if a["agent_name"] == "fundamental" and a.get("metrics"):
-                m = a["metrics"]
-                fund_parts = []
-                if m.get("forward_pe"): fund_parts.append(f"P/E {m['forward_pe']:.0f}")
-                if m.get("revenue_growth") is not None: fund_parts.append(f"CA {m['revenue_growth']*100:+.0f}%")
-                if m.get("profit_margin") is not None: fund_parts.append(f"Marge {m['profit_margin']*100:.0f}%")
-                if m.get("analyst_upside") is not None: fund_parts.append(f"Target {m['analyst_upside']:+.0f}%")
-                if fund_parts:
-                    fields.append({"name": "📈 Fondamentaux", "value": " | ".join(fund_parts), "inline": True})
-
-        # Key technicals
-        vals = s.get("values", {})
-        if vals:
-            tech_parts = []
-            if vals.get("rsi_14") is not None: tech_parts.append(f"RSI {vals['rsi_14']:.0f}")
-            if vals.get("atr_relative") is not None: tech_parts.append(f"ATR {vals['atr_relative']:.1f}%")
-            if vals.get("trend_5d") is not None: tech_parts.append(f"5j {vals['trend_5d']:+.1f}%")
-            if tech_parts:
-                fields.append({"name": "📊 Technique", "value": " | ".join(tech_parts), "inline": True})
-
-        # Debate
-        if db and db.get("key_factor"):
-            bull_s = db.get("bull_strength", 0)
-            bear_s = db.get("bear_strength", 0)
+        # Analyst scores compact
+        if reports:
+            scores_map = {a["agent_name"]: a for a in reports}
+            tech_a = scores_map.get("technical", {})
+            fund_a = scores_map.get("fundamental", {})
+            macro_a = scores_map.get("macro", {})
+            sent_a = scores_map.get("sentiment", {})
             fields.append({
-                "name": f"⚖️ Débat (🐂{bull_s}% vs 🐻{bear_s}%)",
+                "name": "Analystes",
+                "value": (
+                    f"📊 Tech: **{tech_a.get('score', 0):+.1f}** | "
+                    f"📈 Fond: **{fund_a.get('score', 0):+.1f}** | "
+                    f"🌍 Macro: **{macro_a.get('score', 0):+.1f}** | "
+                    f"💬 Sent: **{sent_a.get('score', 0):+.1f}**"
+                ),
+                "inline": False,
+            })
+
+        # Fundamentals row
+        for a in reports:
+            if a.get("agent_name") == "fundamental" and a.get("metrics"):
+                m = a["metrics"]
+                parts = []
+                if m.get("forward_pe"): parts.append(f"P/E {m['forward_pe']:.0f}")
+                if m.get("revenue_growth") is not None: parts.append(f"CA {m['revenue_growth']*100:+.0f}%")
+                if m.get("profit_margin") is not None: parts.append(f"Marge {m['profit_margin']*100:.0f}%")
+                if m.get("analyst_upside") is not None: parts.append(f"Cible {m['analyst_upside']:+.0f}%")
+                if parts:
+                    fields.append({"name": "📈 Fondamentaux", "value": " | ".join(parts), "inline": False})
+
+        # Technicals + Filters row
+        vals = s.get("values", {})
+        filters = s.get("filters", {})
+        tech_parts = []
+        if vals.get("rsi_14") is not None: tech_parts.append(f"RSI {vals['rsi_14']:.0f}")
+        if vals.get("trend_5d") is not None: tech_parts.append(f"5j {vals['trend_5d']:+.1f}%")
+        if vals.get("atr_relative") is not None: tech_parts.append(f"Vol {vals['atr_relative']:.1f}%")
+        if filters:
+            filter_str = " ".join("✅" if v else "❌" for v in filters.values())
+            tech_parts.append(filter_str)
+        if tech_parts:
+            fields.append({"name": "📊 Technique", "value": " | ".join(tech_parts), "inline": False})
+
+        # Debate (if available)
+        if db and db.get("key_factor"):
+            fields.append({
+                "name": f"⚖️ Débat (🐂{db.get('bull_strength', 0)}% vs 🐻{db.get('bear_strength', 0)}%)",
                 "value": db["key_factor"][:120],
                 "inline": False,
             })
 
-        # Position sizing
-        if risk and risk.get("position"):
-            pos = risk["position"]
-            fields.append({
-                "name": "💰 Position",
-                "value": f"{pos['shares']} × ${price:.0f} = ${pos['dollar_value']:.0f} ({pos['risk_pct']:.1f}%)",
-                "inline": True,
-            })
+        # LLM summary
+        summary = l.get("summary", "")
+        if summary:
+            fields.append({"name": "💡 Synthèse", "value": summary[:200], "inline": False})
 
         embeds.append({
-            "title": f"{emoji} {ticker} — {verdict} ({conf}%)",
-            "description": "\n".join(desc_parts),
+            "title": title,
+            "description": desc,
             "color": color,
-            "fields": fields[:10],
-            "footer": {"text": "Trading Agent v2"},
+            "fields": fields[:8],
         })
 
     if not embeds:
         return
 
-    # Discord allows max 10 embeds per message
+    # Discord max 10 embeds per message
     for i in range(0, len(embeds), 10):
         batch = embeds[i:i + 10]
-        # Add timestamp to last embed of batch
         batch[-1]["timestamp"] = datetime.utcnow().isoformat()
-        batch[-1]["footer"] = {"text": f"Trading Agent v2 | Scan {market} | {len(embeds)} tickers"}
+        batch[-1]["footer"] = {
+            "text": f"Trading Agent v2 | Scan {market} | {len(valid)} tickers classés par score",
+        }
         await send_discord_embed(batch)
 
 
