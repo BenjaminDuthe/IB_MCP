@@ -215,6 +215,14 @@ async def api_run_backtest():
     return result
 
 
+@app.post("/api/backtest/v3")
+async def api_v3_backtest():
+    """Test 20 pro strategies (Connors RSI, IBS, streak, etc.) on 10yr data."""
+    from scoring_engine.backtest.strategies_v3 import run_v3_backtest
+    from scoring_engine.config import WATCHLIST
+    return await run_v3_backtest(list(WATCHLIST.keys()))
+
+
 @app.get("/api/backtest/calibration")
 async def api_get_calibration():
     """Get current calibration table (win rates per score level)."""
