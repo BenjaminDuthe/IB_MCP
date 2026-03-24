@@ -131,7 +131,7 @@ async def get_openclaw_verdicts(ticker_reports: list[dict]) -> dict | None:
     headers = {
         "Authorization": f"Bearer {OPENCLAW_TOKEN}",
         "Content-Type": "application/json",
-        "x-openclaw-session-key": "trading-decision",
+        "x-openclaw-session-key": "agent:trading:main",
     }
 
     try:
