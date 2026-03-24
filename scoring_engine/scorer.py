@@ -168,6 +168,39 @@ def compute_score(ticker: str, technicals: dict) -> dict:
         "win_rate_5d": 53.0, "win_rate_20d": 55.0, "win_rate_60d": 58.0,
     }
 
+    # ================================================================
+    # WATCH SIGNALS (setup detected but not confirmed yet)
+    # ================================================================
+
+    watch_signals = []
+
+    # Mean reversion setup WITHOUT confirmation (still falling)
+    if not not_crashing:
+        # Connors oversold but still crashing
+        if rsi2_proxy is not None and rsi2_proxy < 15 and above_sma200:
+            watch_signals.append({
+                "name": "Connors RSI survendu (en attente)",
+                "desc": "L'action est survendue mais continue de baisser — attendre le rebond",
+                "condition": "Passe en ACHAT quand la tendance 5j repasse au-dessus de -1%",
+                "win_rate_60d": 68.1,
+            })
+        # BB + RSI oversold but still crashing
+        if boll_lower and price and price <= boll_lower * 1.02 and rsi_14 and rsi_14 < 35 and above_sma200:
+            watch_signals.append({
+                "name": "Bollinger survendu (en attente)",
+                "desc": "Prix au plancher de Bollinger mais encore en baisse",
+                "condition": "Passe en ACHAT quand la baisse s'arrête",
+                "win_rate_60d": 62.6,
+            })
+        # Streak + IBS but still crashing
+        if rsi2_proxy is not None and rsi2_proxy < 20 and ibs_proxy is not None and ibs_proxy < 0.3:
+            watch_signals.append({
+                "name": "Série de baisses (en attente)",
+                "desc": "Forte série de baisses — potentiel de rebond quand la pression vendeuse s'épuise",
+                "condition": "Passe en ACHAT quand trend 5j > -1%",
+                "win_rate_60d": 63.6,
+            })
+
     # --- Old filters (kept for compatibility) ---
     f_sma20 = bool(sma_20 and price > sma_20)
     t5d_threshold = cfg.get("t5d_threshold", 2.5)
@@ -209,6 +242,7 @@ def compute_score(ticker: str, technicals: dict) -> dict:
         ],
         "best_win_rate": round(best_win_rate_60d, 1),
         "avg_win_rate": round(avg_win_rate_60d, 1),
+        "watch_signals": watch_signals,
         "filters": old_filters,
         "signals_detail": {name: {"active": s["active"], "name": s["name"]} for name, s in signals.items()},
         "values": {

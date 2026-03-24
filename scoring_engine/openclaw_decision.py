@@ -30,7 +30,7 @@ Reponds UNIQUEMENT en JSON valide (pas de markdown, pas de commentaires) :
     {
       "rank": 1,
       "ticker": "NVDA",
-      "verdict": "BUY",
+      "verdict": "BUY ou WATCH ou HOLD ou SELL",
       "conviction": 78,
       "bull_case": "Pourquoi acheter (1-2 phrases simples)",
       "bear_case": "Pourquoi hesiter (1-2 phrases simples)",
@@ -44,7 +44,11 @@ Reponds UNIQUEMENT en JSON valide (pas de markdown, pas de commentaires) :
   "market_comment": "1-2 phrases simples sur le contexte economique general"
 }
 
-Classe TOUS les tickers du meilleur au pire. BUY = opportunite claire avec conviction >= 60. HOLD = pas de signal clair ou conviction trop faible. SELL = eviter/sortir."""
+Classe TOUS les tickers du meilleur au pire.
+BUY = signal actif confirme, conviction >= 60.
+WATCH = signal mean reversion detecte mais l'action baisse encore, a surveiller pour achat futur.
+HOLD = pas de signal.
+SELL = eviter/sortir."""
 
 
 async def get_openclaw_verdicts(ticker_reports: list[dict]) -> dict | None:
@@ -98,6 +102,13 @@ async def get_openclaw_verdicts(ticker_reports: list[dict]) -> dict | None:
                 lines.append(f"    ✅ {sig['name']} (win rate: {sig['win_rate_60d']}% à 60j)")
         else:
             lines.append("  AUCUN SIGNAL ACTIF")
+
+        # Watch signals (setup detected but not confirmed)
+        watch_sigs = score.get("watch_signals", [])
+        if watch_sigs:
+            lines.append("  À SURVEILLER:")
+            for ws in watch_sigs:
+                lines.append(f"    👀 {ws['name']} — {ws['condition']}")
 
         filters = score.get("filters", {})
         if filters:
