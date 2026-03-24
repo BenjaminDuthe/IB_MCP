@@ -139,10 +139,12 @@ async def api_deep_analyze(ticker: str):
 
 @app.get("/api/market-pulse")
 async def api_market_pulse():
-    """Scan all tickers, return summary."""
+    """Scan all exchanges."""
+    from scoring_engine.config import EXCHANGE_GROUPS
+    from scoring_engine.pipeline import scan_exchange
     results = {}
-    for market in ("US", "FR"):
-        results[market] = await scan_market(market)
+    for exchange in EXCHANGE_GROUPS:
+        results[exchange] = await scan_exchange(exchange)
     return results
 
 
