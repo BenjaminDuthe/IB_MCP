@@ -25,12 +25,15 @@ class MacroAnalyst(AnalystAgent):
         macro = context.get("macro") or {}
         sectors = context.get("sectors") or {}
 
-        markets = macro.get("markets", {})
+        markets = macro.get("markets") or {}
         # Extract key indices
         vix = None
         sp500_change = None
         treasury_10y = None
         dxy = None
+
+        if not isinstance(markets, (list, dict)):
+            markets = {}
 
         for item in markets if isinstance(markets, list) else []:
             name = item.get("name", "").lower()

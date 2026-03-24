@@ -21,7 +21,6 @@ INFLUXDB_URL = os.environ.get("INFLUXDB_URL", "http://192.168.1.123:8086")
 INFLUXDB_DATABASE = os.environ.get("INFLUXDB_DATABASE", "trading")
 INFLUXDB_USER = os.environ.get("INFLUXDB_USER", "trading_writer")
 INFLUXDB_PASSWORD = os.environ.get("INFLUXDB_PASSWORD", "")
-MONGODB_URI = os.environ.get("MONGODB_URI", "")
 
 # --- Telegram / Discord ---
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")

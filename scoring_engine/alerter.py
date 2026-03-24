@@ -35,8 +35,11 @@ async def send_telegram(message: str) -> bool:
             return True
         logger.warning("Telegram send failed: %d %s", resp.status_code, resp.text[:200])
         return False
+    except (httpx.HTTPError, httpx.TimeoutException) as e:
+        logger.error("Telegram network error: %s", e)
+        return False
     except Exception as e:
-        logger.error("Telegram error: %s", e)
+        logger.error("Telegram unexpected error: %s", e)
         return False
 
 
@@ -53,8 +56,11 @@ async def send_discord_embed(embeds: list[dict]) -> bool:
             return True
         logger.warning("Discord send failed: %d %s", resp.status_code, resp.text[:200])
         return False
+    except (httpx.HTTPError, httpx.TimeoutException) as e:
+        logger.error("Discord network error: %s", e)
+        return False
     except Exception as e:
-        logger.error("Discord error: %s", e)
+        logger.error("Discord unexpected error: %s", e)
         return False
 
 

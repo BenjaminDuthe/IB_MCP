@@ -75,7 +75,7 @@ async def _send_to_ollama(articles: list[dict], batch_id: str) -> dict | None:
             return None
 
         if attempt < max_retries - 1:
-            await asyncio.sleep(5)
+            await asyncio.sleep(5 * (attempt + 1))  # 5s, 10s
 
     logger.error("Ollama: all %d retries exhausted for batch %s", max_retries, batch_id)
     return None

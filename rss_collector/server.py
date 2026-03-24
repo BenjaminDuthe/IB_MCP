@@ -1,7 +1,9 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
 
+import httpx
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
@@ -23,16 +25,20 @@ async def _collection_job():
     try:
         stats = await run_collection_cycle()
         await log_pipeline_run("collection", stats)
+    except (httpx.HTTPError, asyncio.TimeoutError) as e:
+        logger.error("Collection cycle failed (network): %s", e)
     except Exception as e:
-        logger.error("Collection cycle failed: %s", e, exc_info=True)
+        logger.error("Collection cycle failed (unexpected): %s", e, exc_info=True)
 
 
 async def _push_job():
     try:
         stats = await run_ollama_push()
         await log_pipeline_run("ollama_push", stats)
+    except (httpx.HTTPError, asyncio.TimeoutError) as e:
+        logger.error("Ollama push failed (network): %s", e)
     except Exception as e:
-        logger.error("OpenClaw push failed: %s", e, exc_info=True)
+        logger.error("Ollama push failed (unexpected): %s", e, exc_info=True)
 
 
 @asynccontextmanager

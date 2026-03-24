@@ -1,5 +1,6 @@
-"""Bull/Bear debate mechanism — 3 Ollama calls per ticker."""
+"""Bull/Bear debate mechanism — 3 Ollama calls per ticker (bull+bear parallel)."""
 
+import asyncio
 import logging
 import time
 
@@ -18,13 +19,13 @@ async def run_debate(ticker: str, reports: list[AnalystReport]) -> dict:
     """
     start = time.time()
 
-    # Round 1: Bull argues FOR
-    bull_case = await argue_bull(ticker, reports)
-    logger.info("Debate %s: Bull conviction=%d%%", ticker, bull_case.get("conviction", 0))
-
-    # Round 2: Bear argues AGAINST
-    bear_case = await argue_bear(ticker, reports)
-    logger.info("Debate %s: Bear conviction=%d%%", ticker, bear_case.get("conviction", 0))
+    # Round 1+2: Bull and Bear argue in parallel
+    bull_case, bear_case = await asyncio.gather(
+        argue_bull(ticker, reports),
+        argue_bear(ticker, reports),
+    )
+    logger.info("Debate %s: Bull conviction=%d%% Bear conviction=%d%%",
+                ticker, bull_case.get("conviction", 0), bear_case.get("conviction", 0))
 
     # Round 3: Facilitator evaluates
     verdict = await evaluate(ticker, bull_case, bear_case, reports)
