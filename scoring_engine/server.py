@@ -192,3 +192,31 @@ async def api_portfolio_risk():
         s = TICKER_SECTORS.get(t, "unknown")
         sectors[s] = sectors.get(s, 0) + 1
     return {"active_buy_signals": active, "sector_exposure": sectors}
+
+
+# --- Backtesting endpoints ---
+
+@app.post("/api/backtest/run")
+async def api_run_backtest():
+    """Run full backtest on 10 years of data for all 78 tickers. Takes ~2-5 min."""
+    from scoring_engine.backtest.replayer import backtest_all
+    from scoring_engine.backtest.calibration import save_calibration
+    from scoring_engine.config import WATCHLIST
+
+    params = {t: {"t5d_threshold": w["t5d_threshold"], "rsi_threshold": w["rsi_threshold"],
+                   "require_sma200": w["require_sma200"]}
+              for t, w in WATCHLIST.items()}
+
+    result = await backtest_all(params, horizons=[5, 10, 20, 60])
+
+    # Save calibration from global summary
+    save_calibration(result["global_summary"])
+
+    return result
+
+
+@app.get("/api/backtest/calibration")
+async def api_get_calibration():
+    """Get current calibration table (win rates per score level)."""
+    from scoring_engine.backtest.calibration import load_calibration
+    return load_calibration()

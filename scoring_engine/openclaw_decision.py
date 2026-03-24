@@ -53,7 +53,19 @@ async def get_openclaw_verdicts(ticker_reports: list[dict]) -> dict | None:
         return None
 
     # Format reports into a structured prompt
-    lines = []
+    # Include calibration data so Claude uses real win rates
+    from scoring_engine.backtest.calibration import load_calibration
+    cal = load_calibration()
+    lines = ["\n=== DONNEES DE CALIBRATION (basees sur 10 ans de backtest) ==="]
+    for score_key in sorted(cal.keys()):
+        parts = []
+        for h_key, data in cal[score_key].items():
+            if isinstance(data, dict):
+                parts.append(f"{h_key}: {data.get('win_rate', '?')}% gagnant, rendement moyen {data.get('avg_return', '?')}%")
+        if parts:
+            lines.append(f"  {score_key}: {' | '.join(parts)}")
+    lines.append("UTILISE ces win rates comme base de conviction — ne les invente pas.\n")
+
     for tr in ticker_reports:
         ticker = tr.get("ticker", "?")
         score = tr.get("score", {})
