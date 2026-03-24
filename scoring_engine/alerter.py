@@ -228,11 +228,9 @@ async def alert_scan_summary(market: str, results: list[dict], openclaw_verdicts
 
     # --- MESSAGE 2: Top 5 detailed embeds ---
     # Only show detailed cards for BUY verdicts
-    # BUY cards (conviction >= 60%) + WATCH cards
+    # BUY cards only (conviction >= 60%). WATCH stays internal.
     buy_results = [r for r in valid if r.get("llm", {}).get("verdict") == "BUY" and r.get("llm", {}).get("confidence", 0) >= 60]
-    watch_results = [r for r in valid if r.get("llm", {}).get("verdict") == "WATCH"]
-
-    if not buy_results and not watch_results:
+    if not buy_results:
         return
 
     embeds = []
@@ -363,55 +361,9 @@ async def alert_scan_summary(market: str, results: list[dict], openclaw_verdicts
             "fields": fields[:10],
         })
 
-    # --- WATCH cards (simpler, just the setup + condition to trigger) ---
-    for r in watch_results:
-        s = r["score"]
-        ticker = s.get("ticker", "?")
-        info = TICKER_INFO.get(ticker, {})
-        name = info.get("name", ticker)
-        flag = info.get("country", "")
-        company_desc = TICKER_DESCRIPTION.get(ticker, "")
-        price = s.get("price", 0)
-        watch_sigs = s.get("watch_signals", [])
-
-        if not watch_sigs:
-            continue
-
-        watch_desc = f"*{company_desc}*\n" if company_desc else ""
-        watch_desc += f"👀 **À SURVEILLER** | ${price:.2f}\n"
-        watch_desc += f"L'action est survendue mais continue de baisser"
-
-        watch_fields = []
-        for ws in watch_sigs:
-            watch_fields.append({
-                "name": f"👀 {ws['name']}",
-                "value": f"{ws['desc']}\n**Condition d'achat :** {ws['condition']}\nWin rate historique : {ws['win_rate_60d']}% à 2 mois",
-                "inline": False,
-            })
-
-        trend = s.get("values", {}).get("trend_5d")
-        if trend is not None:
-            watch_fields.append({
-                "name": "📉 Tendance actuelle",
-                "value": f"L'action a perdu {abs(trend):.1f}% sur 5 jours — le rebond n'a pas encore commencé",
-                "inline": False,
-            })
-
-        embeds.append({
-            "title": f"👀 {name} ({ticker}) {flag}",
-            "description": watch_desc,
-            "color": 0xFF9800,  # orange
-            "fields": watch_fields[:6],
-        })
-
     if embeds:
-        buy_count = len(buy_results)
-        watch_count = len([r for r in watch_results if r["score"].get("watch_signals")])
-        parts = []
-        if buy_count: parts.append(f"{buy_count} achat(s)")
-        if watch_count: parts.append(f"{watch_count} à surveiller")
         embeds[-1]["timestamp"] = datetime.utcnow().isoformat()
-        embeds[-1]["footer"] = {"text": f"Trading Agent v2 | {market} — {' + '.join(parts) if parts else 'aucun signal'}"}
+        embeds[-1]["footer"] = {"text": f"Trading Agent v2 | {market} — {len(buy_results)} achat(s) recommandé(s)"}
         await send_discord_embed(embeds)
 
 

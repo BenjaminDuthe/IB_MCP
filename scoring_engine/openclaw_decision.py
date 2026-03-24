@@ -46,9 +46,11 @@ Reponds UNIQUEMENT en JSON valide (pas de markdown, pas de commentaires) :
 
 Classe TOUS les tickers du meilleur au pire.
 BUY = signal actif confirme, conviction >= 60.
-WATCH = signal mean reversion detecte mais l'action baisse encore, a surveiller pour achat futur.
+WATCH = signal mean reversion detecte mais l'action baisse encore — TU surveilles en interne et tu previens quand ca passe en BUY.
 HOLD = pas de signal.
-SELL = eviter/sortir."""
+SELL = eviter/sortir.
+
+IMPORTANT pour les WATCH : ne les mets PAS dans le classement principal. Mentionne-les dans market_comment en disant : "X tickers a surveiller (noms) — signal mean reversion en attente de confirmation". Quand un ancien WATCH passe en BUY, signale-le dans portfolio_alerts avec "NOUVEAU : [ticker] passe de A SURVEILLER a ACHAT"."""
 
 
 async def get_openclaw_verdicts(ticker_reports: list[dict]) -> dict | None:
