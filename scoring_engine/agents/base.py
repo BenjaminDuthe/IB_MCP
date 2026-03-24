@@ -33,7 +33,7 @@ class OllamaClient:
     def __init__(self, url: str = OLLAMA_URL, model: str = OLLAMA_MODEL):
         self.url = url
         self.model = model
-        self._client = httpx.AsyncClient(timeout=60.0)
+        self._client = httpx.AsyncClient(timeout=45.0)
 
     async def generate(
         self, system_prompt: str, user_prompt: str,
@@ -64,8 +64,11 @@ class OllamaClient:
             return json.loads(text)
         except json.JSONDecodeError:
             return {"raw": raw, "_parse_error": True}
-        except Exception as e:
+        except (httpx.HTTPError, httpx.TimeoutException) as e:
             logger.error("Ollama generate failed: %s", e)
+            return {"raw": "", "_error": str(e)}
+        except Exception as e:
+            logger.error("Ollama unexpected error: %s", e)
             return {"raw": "", "_error": str(e)}
 
 

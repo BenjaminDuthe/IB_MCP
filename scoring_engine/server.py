@@ -175,9 +175,10 @@ async def api_drift_check():
 @app.get("/api/risk/portfolio")
 async def api_portfolio_risk():
     """Get current risk state."""
-    from scoring_engine.risk.portfolio_risk import _active_buy_signals, TICKER_SECTORS
+    from scoring_engine.risk.portfolio_risk import get_active_signals, TICKER_SECTORS
+    active = get_active_signals()
     sectors = {}
-    for t in _active_buy_signals:
+    for t in active:
         s = TICKER_SECTORS.get(t, "unknown")
         sectors[s] = sectors.get(s, 0) + 1
-    return {"active_buy_signals": _active_buy_signals, "sector_exposure": sectors}
+    return {"active_buy_signals": active, "sector_exposure": sectors}

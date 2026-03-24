@@ -231,11 +231,11 @@ services:
       - OLLAMA_MODEL=llama3.2:3b
       - INFLUXDB_URL=http://192.168.1.123:8086
       - INFLUXDB_DATABASE=trading
-      - INFLUXDB_USER=trading_writer
-      - INFLUXDB_PASSWORD=tw_s3cur3_2026
+      - INFLUXDB_USER=${INFLUXDB_USER:-trading_writer}
+      - INFLUXDB_PASSWORD=${INFLUXDB_PASSWORD}
       - MCP_MARKET_DATA_URL=http://mcp_market_data:${MCP_MARKET_DATA_PORT}
       - MCP_SENTIMENT_URL=http://mcp_sentiment:${MCP_SENTIMENT_PORT}
-      - DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1485783083528753364/LoMfWa67YCHS_nhC6DwuxhQcrXwvy5wwcvTLlIIRsy-YBAhLo75oZgEHFl8wEPtXhFA3
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - AGENT_LAYERS_ENABLED=true

@@ -40,16 +40,22 @@ _macro_agent = None
 _sentiment_agent = None
 
 
-def _init_agents():
+_init_lock = asyncio.Lock()
+
+
+async def _init_agents():
     global _agents_initialized, _technical_agent, _fundamental_agent, _macro_agent, _sentiment_agent
     if _agents_initialized:
         return
-    from scoring_engine.agents import TechnicalAnalyst, FundamentalAnalyst, MacroAnalyst, SentimentAnalyst
-    _technical_agent = TechnicalAnalyst()
-    _fundamental_agent = FundamentalAnalyst()
-    _macro_agent = MacroAnalyst()
-    _sentiment_agent = SentimentAnalyst()
-    _agents_initialized = True
+    async with _init_lock:
+        if _agents_initialized:  # double-check after acquiring lock
+            return
+        from scoring_engine.agents import TechnicalAnalyst, FundamentalAnalyst, MacroAnalyst, SentimentAnalyst
+        _technical_agent = TechnicalAnalyst()
+        _fundamental_agent = FundamentalAnalyst()
+        _macro_agent = MacroAnalyst()
+        _sentiment_agent = SentimentAnalyst()
+        _agents_initialized = True
 
 
 # --- Data fetchers ---
@@ -123,7 +129,7 @@ async def scan_ticker(ticker: str, macro_context: dict | None = None) -> dict:
 
     # --- PHASE 1: Fetch data ---
     if AGENT_LAYERS_ENABLED:
-        _init_agents()
+        await _init_agents()
         technicals, sentiment, fundamentals, analyst_data = await asyncio.gather(
             _fetch_technicals(ticker),
             _fetch_sentiment(ticker),
@@ -230,7 +236,7 @@ async def scan_tickers(tickers: list[str]) -> dict:
     # Reset per-cycle risk state
     if RISK_SIZING_ENABLED:
         from scoring_engine.risk.portfolio_risk import reset_cycle
-        reset_cycle()
+        await reset_cycle()
 
     for ticker in tickers:
         r = await scan_ticker(ticker, macro_context=macro_context)

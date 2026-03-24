@@ -39,9 +39,15 @@ async def get_recent_signals(limit: int = 50) -> list[dict]:
     return await _query_influx(query)
 
 
+def _safe_ticker(ticker: str) -> str:
+    """Sanitize ticker for InfluxQL to prevent injection."""
+    return ticker.replace("'", "").replace(";", "").replace("\\", "").replace('"', "")
+
+
 async def get_price_at_time(ticker: str, timestamp: str) -> float | None:
     """Get the closest price to a given timestamp."""
-    query = f"SELECT price FROM technicals WHERE ticker='{ticker}' AND time <= '{timestamp}' ORDER BY time DESC LIMIT 1"
+    safe = _safe_ticker(ticker)
+    query = f"SELECT price FROM technicals WHERE ticker='{safe}' AND time <= '{timestamp}' ORDER BY time DESC LIMIT 1"
     rows = await _query_influx(query)
     return rows[0]["price"] if rows else None
 

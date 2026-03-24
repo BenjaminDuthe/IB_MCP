@@ -14,14 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 async def enhanced_risk_check(ticker: str, score_data: dict, llm: dict) -> dict:
-    """Full risk assessment before alerting a BUY signal.
-
-    Returns {approved, position, warnings, reason}.
-    """
+    """Full risk assessment before alerting a BUY signal."""
     warnings = []
 
     # 1. Sector concentration
-    sector_check = check_sector_concentration(ticker)
+    sector_check = await check_sector_concentration(ticker)
     if not sector_check["passed"]:
         return {
             "approved": False,
@@ -31,7 +28,7 @@ async def enhanced_risk_check(ticker: str, score_data: dict, llm: dict) -> dict:
         }
 
     # 2. Correlation warning
-    corr_check = check_correlation_risk(ticker)
+    corr_check = await check_correlation_risk(ticker)
     if corr_check.get("warning"):
         warnings.append(corr_check["message"])
 
@@ -55,8 +52,8 @@ async def enhanced_risk_check(ticker: str, score_data: dict, llm: dict) -> dict:
         position["dollar_value"] = round(position["shares"] * score_data.get("price", 0), 2)
         position["risk_pct"] = round(position["dollar_value"] / 50000 * 100, 2)
 
-    # Register this BUY for subsequent sector checks in the same cycle
-    register_buy(ticker)
+    # Register this BUY for subsequent sector checks
+    await register_buy(ticker)
 
     return {
         "approved": True,

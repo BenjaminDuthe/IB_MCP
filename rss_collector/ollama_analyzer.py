@@ -50,7 +50,7 @@ async def _send_to_ollama(articles: list[dict], batch_id: str) -> dict | None:
     max_retries = 2
     for attempt in range(max_retries):
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(
                     f"{OLLAMA_URL}/api/generate",
                     json={

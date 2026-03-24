@@ -1,5 +1,6 @@
 """Portfolio-level risk checks: sector concentration, correlation, drawdown."""
 
+import asyncio
 import logging
 
 from scoring_engine.config import (
@@ -11,28 +12,30 @@ from scoring_engine.config import (
 
 logger = logging.getLogger(__name__)
 
-# Track active signals this scan cycle (reset per scan_tickers call)
+# Thread-safe cycle state
+_lock = asyncio.Lock()
 _active_buy_signals: list[str] = []
 
 
-def reset_cycle():
+async def reset_cycle():
     """Reset per-cycle state. Called at start of scan_tickers."""
-    global _active_buy_signals
-    _active_buy_signals = []
+    async with _lock:
+        _active_buy_signals.clear()
 
 
-def register_buy(ticker: str):
+async def register_buy(ticker: str):
     """Register a BUY signal in the current scan cycle."""
-    _active_buy_signals.append(ticker)
+    async with _lock:
+        _active_buy_signals.append(ticker)
 
 
-def check_sector_concentration(ticker: str) -> dict:
+async def check_sector_concentration(ticker: str) -> dict:
     """Check if adding this ticker would exceed sector limits."""
-    sector = TICKER_SECTORS.get(ticker, "unknown")
-    same_sector_buys = [t for t in _active_buy_signals if TICKER_SECTORS.get(t) == sector]
-    count = len(same_sector_buys)
+    async with _lock:
+        sector = TICKER_SECTORS.get(ticker, "unknown")
+        same_sector_buys = [t for t in _active_buy_signals if TICKER_SECTORS.get(t) == sector]
+        count = len(same_sector_buys)
 
-    # Simple heuristic: if >2 tickers in same sector already signaled BUY, warn
     if count >= 3:
         return {
             "passed": False,
@@ -44,10 +47,11 @@ def check_sector_concentration(ticker: str) -> dict:
     return {"passed": True, "sector": sector, "count": count}
 
 
-def check_correlation_risk(ticker: str) -> dict:
+async def check_correlation_risk(ticker: str) -> dict:
     """Warn if multiple correlated tickers are signaling BUY simultaneously."""
-    sector = TICKER_SECTORS.get(ticker, "unknown")
-    correlated = [t for t in _active_buy_signals if TICKER_SECTORS.get(t) == sector and t != ticker]
+    async with _lock:
+        sector = TICKER_SECTORS.get(ticker, "unknown")
+        correlated = [t for t in _active_buy_signals if TICKER_SECTORS.get(t) == sector and t != ticker]
 
     if correlated:
         return {
@@ -68,3 +72,8 @@ def check_drawdown_protection(current_drawdown_pct: float = 0.0) -> dict:
             "reason": f"Drawdown {current_drawdown_pct:.1f}% > seuil {DRAWDOWN_REDUCE_THRESHOLD}%",
         }
     return {"reduce": False, "multiplier": 1.0}
+
+
+def get_active_signals() -> list[str]:
+    """Get a copy of active buy signals (for API endpoint)."""
+    return list(_active_buy_signals)
