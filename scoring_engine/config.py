@@ -59,15 +59,28 @@ WIN_RATE_DRIFT_THRESHOLD = float(os.environ.get("WIN_RATE_DRIFT_THRESHOLD", "0.6
 
 # --- Sector mapping ---
 TICKER_SECTORS = {
+    # US Tech
     "NVDA": "tech", "MSFT": "tech", "GOOGL": "tech", "AMZN": "tech",
-    "META": "tech", "AAPL": "tech", "NFLX": "tech",
+    "META": "tech", "AAPL": "tech", "NFLX": "tech", "TSLA": "tech",
+    "AMD": "tech", "CRM": "tech", "AVGO": "tech",
+    # US Healthcare
+    "UNH": "healthcare", "JNJ": "healthcare", "LLY": "healthcare",
+    # US Finance
+    "JPM": "finance", "V": "finance",
+    # US Energy / Industrial
+    "XOM": "energy", "CAT": "industrials", "BA": "aerospace",
+    # US Consumer
+    "COST": "consumer", "HD": "consumer",
+    # EU
     "MC.PA": "luxury", "SU.PA": "materials", "AIR.PA": "industrials",
     "BNP.PA": "finance", "SAF.PA": "aerospace", "TTE.PA": "energy",
+    "ASML.AS": "tech", "SAP.DE": "tech", "SIE.DE": "industrials",
+    "OR.PA": "consumer",
 }
 
-# --- Watchlist (from OpenClaw watchlist.json backtest v14) ---
+# --- Watchlist ---
 WATCHLIST = {
-    # US market
+    # --- US Tech ---
     "NVDA":   {"market": "US", "t5d_threshold": 4.0, "rsi_threshold": 50, "require_sma200": False},
     "MSFT":   {"market": "US", "t5d_threshold": 1.5, "rsi_threshold": 55, "require_sma200": True},
     "GOOGL":  {"market": "US", "t5d_threshold": 3.0, "rsi_threshold": 50, "require_sma200": True},
@@ -75,11 +88,33 @@ WATCHLIST = {
     "META":   {"market": "US", "t5d_threshold": 1.0, "rsi_threshold": 50, "require_sma200": True},
     "AAPL":   {"market": "US", "t5d_threshold": 3.5, "rsi_threshold": 50, "require_sma200": True},
     "NFLX":   {"market": "US", "t5d_threshold": 3.0, "rsi_threshold": 50, "require_sma200": True},
-    # EU market
+    "TSLA":   {"market": "US", "t5d_threshold": 5.0, "rsi_threshold": 50, "require_sma200": False},
+    "AMD":    {"market": "US", "t5d_threshold": 4.0, "rsi_threshold": 50, "require_sma200": False},
+    "CRM":    {"market": "US", "t5d_threshold": 2.0, "rsi_threshold": 55, "require_sma200": True},
+    "AVGO":   {"market": "US", "t5d_threshold": 3.0, "rsi_threshold": 50, "require_sma200": True},
+    # --- US Healthcare ---
+    "UNH":    {"market": "US", "t5d_threshold": 2.0, "rsi_threshold": 55, "require_sma200": True},
+    "JNJ":    {"market": "US", "t5d_threshold": 1.5, "rsi_threshold": 60, "require_sma200": True},
+    "LLY":    {"market": "US", "t5d_threshold": 3.0, "rsi_threshold": 50, "require_sma200": True},
+    # --- US Finance ---
+    "JPM":    {"market": "US", "t5d_threshold": 2.0, "rsi_threshold": 55, "require_sma200": True},
+    "V":      {"market": "US", "t5d_threshold": 1.5, "rsi_threshold": 55, "require_sma200": True},
+    # --- US Energy / Industrial ---
+    "XOM":    {"market": "US", "t5d_threshold": 3.0, "rsi_threshold": 55, "require_sma200": False},
+    "CAT":    {"market": "US", "t5d_threshold": 2.5, "rsi_threshold": 55, "require_sma200": True},
+    "BA":     {"market": "US", "t5d_threshold": 4.0, "rsi_threshold": 50, "require_sma200": False},
+    # --- US Consumer ---
+    "COST":   {"market": "US", "t5d_threshold": 1.5, "rsi_threshold": 55, "require_sma200": True},
+    "HD":     {"market": "US", "t5d_threshold": 2.0, "rsi_threshold": 55, "require_sma200": True},
+    # --- EU ---
     "MC.PA":  {"market": "FR", "t5d_threshold": 3.5, "rsi_threshold": 60, "require_sma200": False},
     "SU.PA":  {"market": "FR", "t5d_threshold": 4.0, "rsi_threshold": 55, "require_sma200": True},
     "AIR.PA": {"market": "FR", "t5d_threshold": 3.5, "rsi_threshold": 65, "require_sma200": False},
     "BNP.PA": {"market": "FR", "t5d_threshold": 2.5, "rsi_threshold": 50, "require_sma200": False},
     "SAF.PA": {"market": "FR", "t5d_threshold": 2.0, "rsi_threshold": 50, "require_sma200": True},
     "TTE.PA": {"market": "FR", "t5d_threshold": 3.5, "rsi_threshold": 55, "require_sma200": False},
+    "ASML.AS": {"market": "FR", "t5d_threshold": 3.5, "rsi_threshold": 50, "require_sma200": True},
+    "SAP.DE": {"market": "FR", "t5d_threshold": 2.0, "rsi_threshold": 55, "require_sma200": True},
+    "SIE.DE": {"market": "FR", "t5d_threshold": 2.5, "rsi_threshold": 55, "require_sma200": True},
+    "OR.PA":  {"market": "FR", "t5d_threshold": 2.0, "rsi_threshold": 55, "require_sma200": True},
 }
