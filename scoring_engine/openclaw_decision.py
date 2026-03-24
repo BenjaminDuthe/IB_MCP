@@ -11,15 +11,17 @@ logger = logging.getLogger(__name__)
 OPENCLAW_API_URL = os.environ.get("OPENCLAW_API_URL", "http://192.168.1.125:18789/v1/responses")
 OPENCLAW_TOKEN = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "")
 
-DECISION_PROMPT = """Tu es le comite d'investissement d'un fonds. Tu recois les rapports d'analyse de 4 agents (technique, fondamental, macro, sentiment) pour chaque ticker d'un portefeuille.
+DECISION_PROMPT = """Tu es le comite d'investissement d'un fonds. Tu recois les rapports de 4 analystes (technique, fondamental, macro, sentiment) pour chaque ticker.
 
-REGLES STRICTES :
-1. Un ticker avec score technique 0-2/5 ne peut PAS etre BUY sauf fondamentaux exceptionnels (CA>50%, P/E<15)
-2. Detecte les surexpositions sectorielles (max 3 BUY dans le meme secteur)
-3. Score tes convictions de 0 a 100 — sois honnete, pas optimiste
-4. Si les donnees sont insuffisantes (sentiment=0, macro=unknown), baisse la conviction
+TON ROLE : peser le pour et le contre de chaque ticker comme un vrai comite. Pour chaque action, argumente brievement les 2 cotes avant de trancher.
 
-Reponds UNIQUEMENT en JSON valide (pas de markdown) :
+REGLES :
+1. Score technique 0-2/5 → NE PEUT PAS etre BUY sauf fondamentaux exceptionnels (CA>50% ET P/E<15)
+2. Max 3 BUY par secteur (tech = 11 tickers, attention surexposition)
+3. Conviction 0-100 : sois honnete. Donnees insuffisantes (sentiment=0, macro=unknown) = conviction basse
+4. Un HOLD n'est pas un echec — c'est la decision la plus frequente d'un bon comite
+
+Reponds UNIQUEMENT en JSON valide (pas de markdown, pas de commentaires) :
 {
   "rankings": [
     {
@@ -27,15 +29,17 @@ Reponds UNIQUEMENT en JSON valide (pas de markdown) :
       "ticker": "NVDA",
       "verdict": "BUY",
       "conviction": 78,
-      "reason": "1 phrase justifiant la decision",
-      "risk": "1 phrase sur le risque principal"
+      "bull_case": "1 phrase : pourquoi acheter",
+      "bear_case": "1 phrase : pourquoi ne pas acheter",
+      "reason": "1 phrase : le facteur decisif qui fait pencher la balance",
+      "risk": "le risque principal a surveiller"
     }
   ],
-  "portfolio_alerts": ["alerte1 si applicable"],
-  "market_comment": "1-2 phrases sur le contexte macro general"
+  "portfolio_alerts": ["alerte si surexposition sectorielle, correlation, ou risque macro"],
+  "market_comment": "1-2 phrases sur le contexte macro du jour"
 }
 
-Classe TOUS les tickers du meilleur au pire. BUY = opportunite claire, HOLD = attendre, SELL = eviter."""
+Classe TOUS les tickers du meilleur au pire. BUY = opportunite claire avec conviction >60. HOLD = pas de signal clair. SELL = eviter/sortir."""
 
 
 async def get_openclaw_verdicts(ticker_reports: list[dict]) -> dict | None:

@@ -8,7 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 
-from scoring_engine.config import WATCHLIST, TZ_CET, AGENT_LAYERS_ENABLED, DEBATE_ENABLED, RISK_SIZING_ENABLED, FEEDBACK_ENABLED
+from scoring_engine.config import WATCHLIST, TZ_CET, AGENT_LAYERS_ENABLED, RISK_SIZING_ENABLED, FEEDBACK_ENABLED
 from scoring_engine.pipeline import (
     scan_ticker,
     scan_market,
@@ -113,7 +113,6 @@ async def health():
         "watchlist_size": len(WATCHLIST),
         "layers": {
             "agents": AGENT_LAYERS_ENABLED,
-            "debate": DEBATE_ENABLED,
             "risk_sizing": RISK_SIZING_ENABLED,
             "feedback": FEEDBACK_ENABLED,
         },
@@ -129,9 +128,13 @@ async def api_scan_ticker(ticker: str):
 
 @app.get("/api/analyze/{ticker}")
 async def api_deep_analyze(ticker: str):
-    """Full analysis with debate forced ON (manual trigger only)."""
+    """Single ticker analysis with OpenClaw decision."""
     ticker = ticker.upper()
-    return await scan_ticker(ticker, force_debate=True)
+    from scoring_engine.pipeline import scan_tickers
+    result = await scan_tickers([ticker])
+    if result["results"]:
+        return result["results"][0]
+    return {"error": "no_result"}
 
 
 @app.get("/api/market-pulse")

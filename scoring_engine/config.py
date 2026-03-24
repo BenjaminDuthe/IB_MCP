@@ -30,23 +30,10 @@ DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 # --- Alert threshold ---
 SIGNAL_SCORE_THRESHOLD = int(os.environ.get("SIGNAL_SCORE_THRESHOLD", "4"))
 
-# --- Feature flags (gradual rollout) ---
-AGENT_LAYERS_ENABLED = os.environ.get("AGENT_LAYERS_ENABLED", "false").lower() == "true"
-DEBATE_ENABLED = os.environ.get("DEBATE_ENABLED", "false").lower() == "true"
-RISK_SIZING_ENABLED = os.environ.get("RISK_SIZING_ENABLED", "false").lower() == "true"
-FEEDBACK_ENABLED = os.environ.get("FEEDBACK_ENABLED", "false").lower() == "true"
-
-# --- Analyst weights in composite score ---
-ANALYST_WEIGHTS = {
-    "technical": float(os.environ.get("WEIGHT_TECHNICAL", "0.40")),
-    "fundamental": float(os.environ.get("WEIGHT_FUNDAMENTAL", "0.25")),
-    "sentiment": float(os.environ.get("WEIGHT_SENTIMENT", "0.20")),
-    "macro": float(os.environ.get("WEIGHT_MACRO", "0.15")),
-}
-
-# --- Debate config ---
-DEBATE_MAX_TOKENS = int(os.environ.get("DEBATE_MAX_TOKENS", "200"))
-DEBATE_TEMPERATURE = float(os.environ.get("DEBATE_TEMPERATURE", "0.4"))
+# --- Feature flags ---
+AGENT_LAYERS_ENABLED = os.environ.get("AGENT_LAYERS_ENABLED", "true").lower() == "true"
+RISK_SIZING_ENABLED = os.environ.get("RISK_SIZING_ENABLED", "true").lower() == "true"
+FEEDBACK_ENABLED = os.environ.get("FEEDBACK_ENABLED", "true").lower() == "true"
 
 # --- Risk management ---
 PORTFOLIO_VALUE = float(os.environ.get("PORTFOLIO_VALUE", "50000"))

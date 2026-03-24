@@ -67,9 +67,10 @@ async def send_discord_embed(embeds: list[dict]) -> bool:
 async def alert_signal(
     ticker: str, score: int, price: float, verdict: str,
     confidence: int, summary: str, filters: dict | None = None,
-    values: dict | None = None, debate: dict | None = None,
+    values: dict | None = None,
     analyst_reports: list[dict] | None = None,
     risk: dict | None = None,
+    bull_case: str = "", bear_case: str = "", openclaw_risk: str = "",
 ) -> None:
     """Send signal alert to Telegram and Discord #signaux-agent."""
     emoji = {"BUY": "🟢", "SELL": "🔴", "HOLD": "⚠️"}.get(verdict, "❓")
@@ -123,17 +124,13 @@ async def alert_signal(
             agent_parts.append(f"{icon} {name.title()}: {s:+.2f}")
         fields.append({"name": "Analystes", "value": " | ".join(agent_parts), "inline": False})
 
-    # Debate section (if available)
-    if debate:
-        bull_arg = debate.get("bull_argument", "")[:200]
-        bear_arg = debate.get("bear_argument", "")[:200]
-        key_factor = debate.get("key_factor", "")
-        if bull_arg:
-            fields.append({"name": "🐂 Argument Haussier", "value": bull_arg, "inline": False})
-        if bear_arg:
-            fields.append({"name": "🐻 Argument Baissier", "value": bear_arg, "inline": False})
-        if key_factor:
-            fields.append({"name": "⚖️ Facteur Décisif", "value": key_factor, "inline": False})
+    # Bull/Bear from OpenClaw
+    if bull_case:
+        fields.append({"name": "🐂 Pour", "value": bull_case[:200], "inline": False})
+    if bear_case:
+        fields.append({"name": "🐻 Contre", "value": bear_case[:200], "inline": False})
+    if openclaw_risk:
+        fields.append({"name": "⚠️ Risque", "value": openclaw_risk[:150], "inline": False})
 
     # Position sizing (if risk data available)
     if risk and risk.get("position"):
