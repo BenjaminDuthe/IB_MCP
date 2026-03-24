@@ -220,3 +220,14 @@ async def api_get_calibration():
     """Get current calibration table (win rates per score level)."""
     from scoring_engine.backtest.calibration import load_calibration
     return load_calibration()
+
+
+@app.post("/api/backtest/multi-factor")
+async def api_multi_factor_backtest():
+    """Test 15+ strategies on 10 years of data. Find what actually works."""
+    from scoring_engine.backtest.multi_factor import run_multi_factor_backtest
+    from scoring_engine.config import WATCHLIST
+    params = {t: {"t5d_threshold": w["t5d_threshold"], "rsi_threshold": w["rsi_threshold"],
+                   "require_sma200": w["require_sma200"]}
+              for t, w in WATCHLIST.items()}
+    return await run_multi_factor_backtest(params)
