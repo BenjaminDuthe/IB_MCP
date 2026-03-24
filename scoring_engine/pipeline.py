@@ -161,7 +161,7 @@ async def scan_ticker(ticker: str, macro_context: dict | None = None, force_deba
         result["analyst_reports"] = [r.to_dict() for r in reports]
         await write_analyst_reports(ticker, reports)
 
-        # --- PHASE 4: Debate (if enabled) ---
+        # --- PHASE 4: LLM summary (factual, no verdict) or Debate ---
         if DEBATE_ENABLED or force_debate:
             from scoring_engine.debate import run_debate
             debate_result = await run_debate(ticker, reports)
@@ -172,7 +172,10 @@ async def scan_ticker(ticker: str, macro_context: dict | None = None, force_deba
                 "summary": debate_result["summary"],
             }
         else:
+            # Ollama generates factual summary only — verdict comes from OpenClaw later
             llm = await synthesize_verdict(ticker, score_data["score"], technicals, sentiment)
+            # Mark as provisional (will be overridden by OpenClaw in scan_tickers)
+            llm["_provisional"] = True
     else:
         # LEGACY PATH: unchanged v1 behavior
         llm = await synthesize_verdict(ticker, score_data["score"], technicals, sentiment)
@@ -243,8 +246,36 @@ async def scan_tickers(tickers: list[str]) -> dict:
         results.append(r)
         if r.get("error"):
             errors += 1
-        if r.get("signal_sent"):
+
+    # --- OpenClaw decision: send all reports, get verdicts ---
+    openclaw_verdicts = None
+    if AGENT_LAYERS_ENABLED:
+        from scoring_engine.openclaw_decision import get_openclaw_verdicts
+        valid_results = [r for r in results if not r.get("error")]
+        if valid_results:
+            openclaw_verdicts = await get_openclaw_verdicts(valid_results)
+            if openclaw_verdicts:
+                # Merge verdicts back into results
+                rankings = {v["ticker"]: v for v in openclaw_verdicts.get("rankings", [])}
+                for r in results:
+                    ticker = r.get("ticker", r.get("score", {}).get("ticker", ""))
+                    verdict_data = rankings.get(ticker)
+                    if verdict_data:
+                        r["llm"] = {
+                            "verdict": verdict_data.get("verdict", "HOLD"),
+                            "confidence": verdict_data.get("conviction", 0),
+                            "summary": verdict_data.get("reason", ""),
+                        }
+                        r["openclaw_risk"] = verdict_data.get("risk", "")
+                        r["openclaw_rank"] = verdict_data.get("rank", 99)
+
+    # Count signals after OpenClaw verdict
+    for r in results:
+        s = r.get("score", {})
+        l = r.get("llm", {})
+        if s.get("score", 0) >= SIGNAL_SCORE_THRESHOLD and l.get("verdict") == "BUY":
             signals += 1
+            r["signal_sent"] = True
 
     duration = time.time() - start
     pipeline_name = "scoring_v2" if AGENT_LAYERS_ENABLED else "scoring"
@@ -253,6 +284,7 @@ async def scan_tickers(tickers: list[str]) -> dict:
     return {
         "tickers_scanned": len(tickers),
         "signals_generated": signals,
+        "openclaw_verdicts": openclaw_verdicts,
         "errors": errors,
         "duration_seconds": round(duration, 1),
         "results": results,
@@ -264,7 +296,7 @@ async def scan_market(market: str) -> dict:
     tickers = [t for t, cfg in WATCHLIST.items() if cfg["market"] == market]
     logger.info("Scanning %s market: %s", market, tickers)
     result = await scan_tickers(tickers)
-    await alert_scan_summary(market, result["results"])
+    await alert_scan_summary(market, result["results"], result.get("openclaw_verdicts"))
     return result
 
 

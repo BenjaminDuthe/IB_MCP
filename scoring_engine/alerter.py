@@ -167,72 +167,110 @@ async def alert_signal(
     await send_discord_embed([embed])
 
 
-async def alert_scan_summary(market: str, results: list[dict]) -> None:
-    """Send rich market scan summary to Discord — ranked, with full company info."""
+async def alert_scan_summary(market: str, results: list[dict], openclaw_verdicts: dict | None = None) -> None:
+    """Option C: compact ranking table + top 5 detailed embeds."""
     from scoring_engine.config import TICKER_INFO, TICKER_SECTORS
 
-    # Filter valid results and sort by score descending (ranking)
     valid = [r for r in results if not r.get("error") and r.get("score")]
-    valid.sort(key=lambda r: (r["score"]["score"], r.get("llm", {}).get("confidence", 0)), reverse=True)
+
+    # Sort by openclaw rank if available, else by score
+    if any(r.get("openclaw_rank") for r in valid):
+        valid.sort(key=lambda r: r.get("openclaw_rank", 99))
+    else:
+        valid.sort(key=lambda r: (r["score"]["score"], r.get("llm", {}).get("confidence", 0)), reverse=True)
 
     if not valid:
         return
 
-    embeds = []
+    # --- MESSAGE 1: Compact ranking table ---
+    lines = []
     for rank, r in enumerate(valid, 1):
         s = r["score"]
         l = r.get("llm", {})
-        db = r.get("debate", {})
-        reports = r.get("analyst_reports", [])
-        risk = r.get("risk")
-        score = s.get("score", 0)
-        price = s.get("price", 0)
+        ticker = s.get("ticker", "?")
+        info = TICKER_INFO.get(ticker, {})
+        name = info.get("name", ticker)[:16]
+        flag = info.get("country", "")
         verdict = l.get("verdict", "?")
         conf = l.get("confidence", 0)
-        ticker = s.get("ticker", "?")
+        price = s.get("price", 0)
+        score = s.get("score", 0)
 
-        # Company metadata
+        # Analyst scores
+        reports = {a["agent_name"]: a["score"] for a in r.get("analyst_reports", [])}
+        fund = reports.get("fundamental", 0)
+        tech = reports.get("technical", 0)
+
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"` {rank:2d}`")
+        v_emoji = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡"}.get(verdict, "⚪")
+
+        lines.append(
+            f"{medal} **{name}** {flag}  {score}/5  {v_emoji}{verdict} {conf}%  ${price:.0f}  📈{fund:+.1f} 📊{tech:+.1f}"
+        )
+
+    # Market comment from OpenClaw
+    market_comment = ""
+    if openclaw_verdicts and openclaw_verdicts.get("market_comment"):
+        market_comment = f"\n\n💬 *{openclaw_verdicts['market_comment']}*"
+
+    # Portfolio alerts
+    alerts_text = ""
+    if openclaw_verdicts and openclaw_verdicts.get("portfolio_alerts"):
+        alerts = openclaw_verdicts["portfolio_alerts"]
+        if alerts:
+            alerts_text = "\n\n⚠️ " + " | ".join(str(a) for a in alerts[:3])
+
+    ranking_embed = {
+        "title": f"📊 Scan {market} — {len(valid)} tickers",
+        "description": "\n".join(lines) + market_comment + alerts_text,
+        "color": COLOR_INFO,
+        "timestamp": datetime.utcnow().isoformat(),
+        "footer": {"text": "Trading Agent v2 | Classement par OpenClaw (Claude)"},
+    }
+    await send_discord_embed([ranking_embed])
+
+    # --- MESSAGE 2: Top 5 detailed embeds ---
+    top5 = valid[:5]
+    embeds = []
+    for rank, r in enumerate(top5, 1):
+        s = r["score"]
+        l = r.get("llm", {})
+        ticker = s.get("ticker", "?")
         info = TICKER_INFO.get(ticker, {})
         name = info.get("name", ticker)
         flag = info.get("country", "")
         exchange = info.get("exchange", "")
         sector = TICKER_SECTORS.get(ticker, "")
-
-        # Rank medal
+        verdict = l.get("verdict", "?")
+        conf = l.get("confidence", 0)
+        price = s.get("price", 0)
+        score = s.get("score", 0)
         medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"#{rank}")
 
-        # Verdict emoji + color
         v_emoji = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡"}.get(verdict, "⚪")
         color = {"BUY": COLOR_BUY, "SELL": COLOR_SELL, "HOLD": COLOR_HOLD}.get(verdict, COLOR_INFO)
 
-        # Title: rank + company name + flag
-        title = f"{medal} {name} ({ticker}) {flag}"
-
-        # Description: verdict + price + exchange + sector
         desc = f"{v_emoji} **{verdict}** ({conf}%) | Score **{score}/5** | ${price:.2f}\n"
-        desc += f"📍 {exchange} | {sector.title()}"
+        desc += f"📍 {exchange} • {sector.title()}"
 
         fields = []
 
-        # Analyst scores compact
+        # Analyst scores
+        reports = r.get("analyst_reports", [])
         if reports:
             scores_map = {a["agent_name"]: a for a in reports}
-            tech_a = scores_map.get("technical", {})
-            fund_a = scores_map.get("fundamental", {})
-            macro_a = scores_map.get("macro", {})
-            sent_a = scores_map.get("sentiment", {})
             fields.append({
                 "name": "Analystes",
                 "value": (
-                    f"📊 Tech: **{tech_a.get('score', 0):+.1f}** | "
-                    f"📈 Fond: **{fund_a.get('score', 0):+.1f}** | "
-                    f"🌍 Macro: **{macro_a.get('score', 0):+.1f}** | "
-                    f"💬 Sent: **{sent_a.get('score', 0):+.1f}**"
+                    f"📊 Tech: **{scores_map.get('technical', {}).get('score', 0):+.1f}** | "
+                    f"📈 Fond: **{scores_map.get('fundamental', {}).get('score', 0):+.1f}** | "
+                    f"🌍 Macro: **{scores_map.get('macro', {}).get('score', 0):+.1f}** | "
+                    f"💬 Sent: **{scores_map.get('sentiment', {}).get('score', 0):+.1f}**"
                 ),
                 "inline": False,
             })
 
-        # Fundamentals row
+        # Fundamentals
         for a in reports:
             if a.get("agent_name") == "fundamental" and a.get("metrics"):
                 m = a["metrics"]
@@ -244,50 +282,36 @@ async def alert_scan_summary(market: str, results: list[dict]) -> None:
                 if parts:
                     fields.append({"name": "📈 Fondamentaux", "value": " | ".join(parts), "inline": False})
 
-        # Technicals + Filters row
+        # Technicals + filters
         vals = s.get("values", {})
         filters = s.get("filters", {})
         tech_parts = []
         if vals.get("rsi_14") is not None: tech_parts.append(f"RSI {vals['rsi_14']:.0f}")
         if vals.get("trend_5d") is not None: tech_parts.append(f"5j {vals['trend_5d']:+.1f}%")
-        if vals.get("atr_relative") is not None: tech_parts.append(f"Vol {vals['atr_relative']:.1f}%")
         if filters:
-            filter_str = " ".join("✅" if v else "❌" for v in filters.values())
-            tech_parts.append(filter_str)
+            tech_parts.append(" ".join("✅" if v else "❌" for v in filters.values()))
         if tech_parts:
             fields.append({"name": "📊 Technique", "value": " | ".join(tech_parts), "inline": False})
 
-        # Debate (if available)
-        if db and db.get("key_factor"):
-            fields.append({
-                "name": f"⚖️ Débat (🐂{db.get('bull_strength', 0)}% vs 🐻{db.get('bear_strength', 0)}%)",
-                "value": db["key_factor"][:120],
-                "inline": False,
-            })
-
-        # LLM summary
-        summary = l.get("summary", "")
-        if summary:
-            fields.append({"name": "💡 Synthèse", "value": summary[:200], "inline": False})
+        # OpenClaw reason + risk
+        reason = l.get("summary", "")
+        risk_text = r.get("openclaw_risk", "")
+        if reason:
+            fields.append({"name": "💡 Verdict", "value": reason[:200], "inline": False})
+        if risk_text:
+            fields.append({"name": "⚠️ Risque", "value": risk_text[:150], "inline": False})
 
         embeds.append({
-            "title": title,
+            "title": f"{medal} {name} ({ticker}) {flag}",
             "description": desc,
             "color": color,
             "fields": fields[:8],
         })
 
-    if not embeds:
-        return
-
-    # Discord max 10 embeds per message
-    for i in range(0, len(embeds), 10):
-        batch = embeds[i:i + 10]
-        batch[-1]["timestamp"] = datetime.utcnow().isoformat()
-        batch[-1]["footer"] = {
-            "text": f"Trading Agent v2 | Scan {market} | {len(valid)} tickers classés par score",
-        }
-        await send_discord_embed(batch)
+    if embeds:
+        embeds[-1]["timestamp"] = datetime.utcnow().isoformat()
+        embeds[-1]["footer"] = {"text": f"Trading Agent v2 | Top 5 {market} | Décisions par OpenClaw"}
+        await send_discord_embed(embeds)
 
 
 async def alert_daily_summary(summary: str) -> None:
