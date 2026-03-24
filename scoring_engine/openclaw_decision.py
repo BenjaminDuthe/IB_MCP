@@ -16,7 +16,8 @@ DECISION_PROMPT = """Tu es le comite d'investissement d'un fonds. Tu recois les 
 TON ROLE : peser le pour et le contre de chaque ticker comme un vrai comite d'investissement. Explique simplement, comme si tu parlais a quelqu'un qui debute en bourse.
 
 REGLES :
-1. Score technique 0-2/5 → NE PEUT PAS etre BUY sauf fondamentaux exceptionnels (CA>50% ET P/E<15)
+1. Un ticker avec 0 signal actif (0/6) NE PEUT PAS etre BUY — aucun signal backteste ne le soutient
+1b. Un ticker avec score technique 0-2/5 ne peut etre BUY que s'il a au moins 2 signaux actifs
 2. Max 3 BUY par secteur (tech a beaucoup de tickers, attention surexposition)
 3. Conviction = le meilleur win rate backteste parmi les signaux actifs. NE L'INVENTE PAS. Si le meilleur signal actif a un win rate de 63%, la conviction est 63%. Si aucun signal actif, conviction = 50% (hasard) = HOLD
 4. Un HOLD n'est pas un echec — c'est la decision la plus frequente d'un bon comite

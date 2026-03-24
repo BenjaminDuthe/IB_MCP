@@ -94,10 +94,15 @@ def compute_score(ticker: str, technicals: dict) -> dict:
     trend_aligned = bool(sma_20 and sma_50 and sma_200 and sma_20 > sma_50 > sma_200)
 
     # --- Momentum ---
-    mom_1m_positive = bool(trend_5d is not None and trend_5d > 0)  # approximate
+    mom_1m_positive = bool(trend_5d is not None and trend_5d > 0)
 
     # --- ATR relative ---
     atr_relative = (atr_14 / price * 100) if (atr_14 and price) else None
+
+    # --- Confirmation filter (not in freefall) ---
+    # Mean reversion signals require the stock is NOT crashing
+    # trend_5d > -1% = the bleeding has slowed or reversed
+    not_crashing = bool(trend_5d is not None and trend_5d > -1.0)
 
     # ================================================================
     # STRATEGY SIGNALS (each with backtested win rate)
@@ -107,31 +112,31 @@ def compute_score(ticker: str, technicals: dict) -> dict:
 
     # 1. Connors RSI composite (proxy via stochastic)
     # Backtest: 64% at 5d, 68% at 60d
-    connors_oversold = bool(rsi2_proxy is not None and rsi2_proxy < 15 and above_sma200)
+    connors_oversold = bool(rsi2_proxy is not None and rsi2_proxy < 15 and above_sma200 and not_crashing)
     signals["connors_oversold"] = {
         "active": connors_oversold,
         "name": "Connors RSI survendu",
-        "desc": "Indicateur court terme en zone basse + tendance long terme haussière",
+        "desc": "Indicateur court terme en zone basse + tendance long terme haussière + début de rebond",
         "win_rate_5d": 58.7, "win_rate_20d": 60.2, "win_rate_60d": 68.1,
     }
 
     # 2. IBS extreme (proxy via bollinger)
     # Backtest: 57% at 5d, 62% at 60d
-    ibs_extreme = bool(ibs_proxy is not None and ibs_proxy < 0.15 and above_sma200)
+    ibs_extreme = bool(ibs_proxy is not None and ibs_proxy < 0.15 and above_sma200 and not_crashing)
     signals["ibs_extreme"] = {
         "active": ibs_extreme,
         "name": "IBS extrême",
-        "desc": "Le prix a clôturé très près du plus bas du jour — rebond probable",
+        "desc": "Prix près du plus bas du jour + début de stabilisation",
         "win_rate_5d": 56.5, "win_rate_20d": 59.5, "win_rate_60d": 62.3,
     }
 
     # 3. Bollinger + oversold
     # Backtest: 56% at 5d, 63% at 60d
-    bb_oversold = bool(boll_lower and price and price <= boll_lower * 1.02 and rsi_14 and rsi_14 < 35 and above_sma200)
+    bb_oversold = bool(boll_lower and price and price <= boll_lower * 1.02 and rsi_14 and rsi_14 < 35 and above_sma200 and not_crashing)
     signals["bb_rsi_oversold"] = {
         "active": bb_oversold,
         "name": "Bollinger + RSI survendu",
-        "desc": "Prix au plancher des bandes de Bollinger + RSI en zone de survente",
+        "desc": "Prix au plancher de Bollinger + RSI survendu + la baisse ralentit",
         "win_rate_5d": 56.1, "win_rate_20d": 58.9, "win_rate_60d": 62.6,
     }
 
@@ -147,11 +152,11 @@ def compute_score(ticker: str, technicals: dict) -> dict:
 
     # 5. Streak down + IBS (proxy)
     # Backtest: 56% at 5d, 64% at 60d
-    streak_ibs = bool(rsi2_proxy is not None and rsi2_proxy < 20 and ibs_proxy is not None and ibs_proxy < 0.3)
+    streak_ibs = bool(rsi2_proxy is not None and rsi2_proxy < 20 and ibs_proxy is not None and ibs_proxy < 0.3 and not_crashing)
     signals["streak_ibs"] = {
         "active": streak_ibs,
         "name": "Série de baisses + IBS",
-        "desc": "Plusieurs jours de baisse consécutifs + clôture près du plus bas",
+        "desc": "Série de baisses qui ralentit + prix près du plus bas du jour",
         "win_rate_5d": 56.0, "win_rate_20d": 58.7, "win_rate_60d": 63.6,
     }
 
