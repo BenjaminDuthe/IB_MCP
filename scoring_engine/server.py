@@ -68,6 +68,33 @@ async def lifespan(app: FastAPI):
         ),
         id="daily_summary",
     )
+    # Weekly performance report: Friday 22:45 CET
+    if FEEDBACK_ENABLED:
+        async def job_weekly_perf():
+            from scoring_engine.feedback.performance import generate_performance_report
+            logger.info("Scheduled: weekly performance report")
+            await generate_performance_report()
+
+        async def job_drift_check():
+            from scoring_engine.feedback.drift_detector import check_drift
+            logger.info("Scheduled: drift check")
+            await check_drift()
+
+        scheduler.add_job(
+            job_weekly_perf, CronTrigger(
+                day_of_week="fri", hour=22, minute=45,
+                timezone="Europe/Paris",
+            ),
+            id="weekly_perf",
+        )
+        scheduler.add_job(
+            job_drift_check, CronTrigger(
+                day_of_week="mon-fri", hour=23, minute=0,
+                timezone="Europe/Paris",
+            ),
+            id="drift_check",
+        )
+
     scheduler.start()
     logger.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
     yield
@@ -123,3 +150,34 @@ async def api_weekly_summary():
 async def api_portfolio_check():
     """Simple portfolio-check placeholder — scans all tickers."""
     return await scan_market("US")
+
+
+# --- Performance & Feedback endpoints ---
+
+@app.get("/api/performance/weekly")
+async def api_weekly_performance():
+    from scoring_engine.feedback.performance import generate_weekly_performance
+    return await generate_weekly_performance()
+
+
+@app.get("/api/performance/signal-accuracy")
+async def api_signal_accuracy():
+    from scoring_engine.feedback.tracker import compute_signal_accuracy
+    return await compute_signal_accuracy()
+
+
+@app.get("/api/performance/drift")
+async def api_drift_check():
+    from scoring_engine.feedback.drift_detector import check_drift
+    return await check_drift()
+
+
+@app.get("/api/risk/portfolio")
+async def api_portfolio_risk():
+    """Get current risk state."""
+    from scoring_engine.risk.portfolio_risk import _active_buy_signals, TICKER_SECTORS
+    sectors = {}
+    for t in _active_buy_signals:
+        s = TICKER_SECTORS.get(t, "unknown")
+        sectors[s] = sectors.get(s, 0) + 1
+    return {"active_buy_signals": _active_buy_signals, "sector_exposure": sectors}

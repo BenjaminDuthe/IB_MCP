@@ -208,6 +208,7 @@ async def scan_ticker(ticker: str, macro_context: dict | None = None) -> dict:
             values=score_data.get("values"),
             debate=result.get("debate"),
             analyst_reports=result.get("analyst_reports"),
+            risk=result.get("risk"),
         )
         result["signal_sent"] = True
 
@@ -225,6 +226,11 @@ async def scan_tickers(tickers: list[str]) -> dict:
     macro_context = None
     if AGENT_LAYERS_ENABLED:
         macro_context = await _fetch_macro_overview()
+
+    # Reset per-cycle risk state
+    if RISK_SIZING_ENABLED:
+        from scoring_engine.risk.portfolio_risk import reset_cycle
+        reset_cycle()
 
     for ticker in tickers:
         r = await scan_ticker(ticker, macro_context=macro_context)

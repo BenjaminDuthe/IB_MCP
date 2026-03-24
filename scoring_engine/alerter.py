@@ -63,6 +63,7 @@ async def alert_signal(
     confidence: int, summary: str, filters: dict | None = None,
     values: dict | None = None, debate: dict | None = None,
     analyst_reports: list[dict] | None = None,
+    risk: dict | None = None,
 ) -> None:
     """Send signal alert to Telegram and Discord #signaux-agent."""
     emoji = {"BUY": "🟢", "SELL": "🔴", "HOLD": "⚠️"}.get(verdict, "❓")
@@ -127,6 +128,26 @@ async def alert_signal(
             fields.append({"name": "🐻 Argument Baissier", "value": bear_arg, "inline": False})
         if key_factor:
             fields.append({"name": "⚖️ Facteur Décisif", "value": key_factor, "inline": False})
+
+    # Position sizing (if risk data available)
+    if risk and risk.get("position"):
+        pos = risk["position"]
+        fields.append({
+            "name": "Position Suggérée",
+            "value": f"{pos['shares']} actions (${pos['dollar_value']:.0f})",
+            "inline": True,
+        })
+        fields.append({
+            "name": "Risque Portfolio",
+            "value": f"{pos['risk_pct']:.1f}% ({pos['method']})",
+            "inline": True,
+        })
+    if risk and risk.get("warnings"):
+        fields.append({
+            "name": "⚠️ Warnings",
+            "value": "\n".join(risk["warnings"][:3]),
+            "inline": False,
+        })
 
     footer = "Trading Agent v2 | Multi-Agent" if (analyst_reports or debate) else "Trading Agent | Scoring Engine"
     embed = {

@@ -240,8 +240,8 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - AGENT_LAYERS_ENABLED=true
       - DEBATE_ENABLED=true
-      - RISK_SIZING_ENABLED=false
-      - FEEDBACK_ENABLED=false
+      - RISK_SIZING_ENABLED=true
+      - FEEDBACK_ENABLED=true
     deploy:
       resources:
         limits:
