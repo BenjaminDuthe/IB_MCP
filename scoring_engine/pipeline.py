@@ -204,8 +204,8 @@ async def scan_market(market: str) -> dict:
     return result
 
 
-async def scan_exchange(exchange: str) -> dict:
-    """Scan all tickers for a specific exchange (Paris, Frankfurt, etc.)."""
+async def scan_exchange(exchange: str, send_discord: bool = True) -> dict:
+    """Scan all tickers for a specific exchange. Set send_discord=False for pre-scan."""
     from scoring_engine.config import EXCHANGE_GROUPS
     tickers = EXCHANGE_GROUPS.get(exchange, [])
     if not tickers:
@@ -213,7 +213,8 @@ async def scan_exchange(exchange: str) -> dict:
         return {"error": f"Unknown exchange: {exchange}"}
     logger.info("Scanning %s exchange: %d tickers", exchange, len(tickers))
     result = await scan_tickers(tickers)
-    await alert_scan_summary(exchange, result["results"], result.get("openclaw_verdicts"))
+    if send_discord:
+        await alert_scan_summary(exchange, result["results"], result.get("openclaw_verdicts"))
     return result
 
 

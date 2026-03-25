@@ -27,7 +27,34 @@ scheduler = AsyncIOScheduler(timezone="Europe/Paris")
 
 # --- Scheduled jobs ---
 
-async def _scan_exchange(exchange: str):
+# Store pre-computed results for delivery at exact time
+_pending_results: dict[str, dict] = {}
+
+
+async def _prescan_exchanges(exchanges: list[str], delivery_label: str):
+    """Scan exchanges in background BEFORE market open, store results."""
+    from scoring_engine.pipeline import scan_exchange
+    for exchange in exchanges:
+        logger.info("Pre-scanning %s for %s delivery", exchange, delivery_label)
+        result = await scan_exchange(exchange, send_discord=False)
+        _pending_results[f"{delivery_label}:{exchange}"] = result
+
+
+async def _deliver_results(exchanges: list[str], delivery_label: str):
+    """Send stored results to Discord at exact delivery time."""
+    from scoring_engine.alerter import alert_scan_summary
+    for exchange in exchanges:
+        key = f"{delivery_label}:{exchange}"
+        result = _pending_results.pop(key, None)
+        if result and result.get("results"):
+            logger.info("Delivering %s scan to Discord NOW", exchange)
+            await alert_scan_summary(exchange, result["results"], result.get("openclaw_verdicts"))
+        else:
+            logger.warning("No pre-scanned results for %s", exchange)
+
+
+async def _scan_and_send(exchange: str):
+    """Scan + send immediately (for rescans during the day)."""
     from scoring_engine.pipeline import scan_exchange
     logger.info("Scheduled: %s scan", exchange)
     await scan_exchange(exchange)
@@ -38,31 +65,48 @@ async def job_daily_summary():
     await generate_daily_summary()
 
 
+EU_EXCHANGES = ["Paris", "Frankfurt", "Amsterdam", "Zurich", "London"]
+US_EXCHANGES = ["NYSE", "NASDAQ"]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # EU exchanges at open (Mon-Fri, CET)
-    for exchange, minute in [("Paris", 0), ("Frankfurt", 5), ("Amsterdam", 10), ("Zurich", 15), ("London", 20)]:
-        scheduler.add_job(
-            _scan_exchange, CronTrigger(day_of_week="mon-fri", hour=9, minute=minute, timezone="Europe/Paris"),
-            args=[exchange], id=f"scan_{exchange.lower()}",
-        )
-    # EU rescans at 12:00 and 16:00 CET
+    # --- EU: pre-scan at 8:45, deliver at 9:00 ---
+    scheduler.add_job(
+        _prescan_exchanges, CronTrigger(day_of_week="mon-fri", hour=8, minute=45, timezone="Europe/Paris"),
+        args=[EU_EXCHANGES, "9h"], id="prescan_eu_9h",
+    )
+    scheduler.add_job(
+        _deliver_results, CronTrigger(day_of_week="mon-fri", hour=9, minute=0, timezone="Europe/Paris"),
+        args=[EU_EXCHANGES, "9h"], id="deliver_eu_9h",
+    )
+
+    # --- EU rescans at 12:00 and 16:00 (scan + send immediately) ---
     for hour in [12, 16]:
-        for exchange, minute in [("Paris", 0), ("Frankfurt", 5), ("Amsterdam", 10), ("Zurich", 15), ("London", 20)]:
+        for exchange in EU_EXCHANGES:
             scheduler.add_job(
-                _scan_exchange, CronTrigger(day_of_week="mon-fri", hour=hour, minute=minute, timezone="Europe/Paris"),
+                _scan_and_send, CronTrigger(day_of_week="mon-fri", hour=hour, minute=0, timezone="Europe/Paris"),
                 args=[exchange], id=f"scan_{exchange.lower()}_{hour}h",
             )
-    # US exchanges (NYSE + NASDAQ) at open 15:30 CET, then 18:00, 20:30
-    for hour, minute in [(15, 30), (18, 0), (20, 30)]:
-        scheduler.add_job(
-            _scan_exchange, CronTrigger(day_of_week="mon-fri", hour=hour, minute=minute, timezone="Europe/Paris"),
-            args=["NYSE"], id=f"scan_nyse_{hour}h{minute:02d}",
-        )
-        scheduler.add_job(
-            _scan_exchange, CronTrigger(day_of_week="mon-fri", hour=hour, minute=minute + 5, timezone="Europe/Paris"),
-            args=["NASDAQ"], id=f"scan_nasdaq_{hour}h{minute + 5:02d}",
-        )
+
+    # --- US: pre-scan at 15:15, deliver at 15:30 ---
+    scheduler.add_job(
+        _prescan_exchanges, CronTrigger(day_of_week="mon-fri", hour=15, minute=15, timezone="Europe/Paris"),
+        args=[US_EXCHANGES, "15h30"], id="prescan_us_open",
+    )
+    scheduler.add_job(
+        _deliver_results, CronTrigger(day_of_week="mon-fri", hour=15, minute=30, timezone="Europe/Paris"),
+        args=[US_EXCHANGES, "15h30"], id="deliver_us_open",
+    )
+
+    # --- US rescans at 18:00 and 20:30 (scan + send immediately) ---
+    for hour, minute in [(18, 0), (20, 30)]:
+        for exchange in US_EXCHANGES:
+            scheduler.add_job(
+                _scan_and_send, CronTrigger(day_of_week="mon-fri", hour=hour, minute=minute, timezone="Europe/Paris"),
+                args=[exchange], id=f"scan_{exchange.lower()}_{hour}h{minute:02d}",
+            )
+
     # Daily summary: Mon-Fri 22:30 CET
     scheduler.add_job(
         job_daily_summary, CronTrigger(day_of_week="mon-fri", hour=22, minute=30, timezone="Europe/Paris"),
