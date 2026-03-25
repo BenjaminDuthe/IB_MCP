@@ -111,7 +111,7 @@ async def scan_ticker(ticker: str, macro_context: dict | None = None) -> dict:
 
     # Write to InfluxDB
     await write_technicals(ticker, score_data["market"], technicals)
-    if sentiment and "unified_score" in sentiment:
+    if sentiment and sentiment.get("unified_score") is not None:
         await write_sentiment(ticker, "combined", sentiment["unified_score"], sentiment.get("unified_label", "neutral"))
     await write_analyst_reports(ticker, reports)
 
