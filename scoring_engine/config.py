@@ -17,9 +17,7 @@ INFLUXDB_DATABASE = os.environ.get("INFLUXDB_DATABASE", "trading")
 INFLUXDB_USER = os.environ.get("INFLUXDB_USER", "trading_writer")
 INFLUXDB_PASSWORD = os.environ.get("INFLUXDB_PASSWORD", "")
 
-# --- Telegram / Discord ---
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+# --- Discord ---
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 
 # --- Alert threshold ---

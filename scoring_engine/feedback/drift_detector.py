@@ -4,7 +4,7 @@ import logging
 
 from scoring_engine.config import WIN_RATE_DRIFT_THRESHOLD
 from scoring_engine.feedback.tracker import compute_signal_accuracy
-from scoring_engine.alerter import send_telegram, send_discord_embed, COLOR_SELL
+from scoring_engine.alerter import send_discord_embed, COLOR_SELL
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,6 @@ async def check_drift() -> dict:
         )
         result["message"] = msg
         logger.warning(msg)
-        await send_telegram(f"⚠️ <b>MODEL DRIFT</b>\n\n{msg}")
         await send_discord_embed([{
             "title": "⚠️ Model Drift Détecté",
             "description": msg,

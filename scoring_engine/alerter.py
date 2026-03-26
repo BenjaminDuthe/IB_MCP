@@ -1,11 +1,11 @@
-"""Alert dispatcher: Telegram + Discord webhooks with rich embeds."""
+"""Alert dispatcher: Discord webhooks with rich embeds."""
 
 import logging
 from datetime import datetime
 
 import httpx
 
-from scoring_engine.config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DISCORD_WEBHOOK_URL
+from scoring_engine.config import DISCORD_WEBHOOK_URL
 
 logger = logging.getLogger(__name__)
 
@@ -16,31 +16,6 @@ COLOR_BUY = 0x00C853    # green
 COLOR_SELL = 0xFF1744    # red
 COLOR_HOLD = 0xFFA000    # amber
 COLOR_INFO = 0x2196F3    # blue
-
-
-async def send_telegram(message: str) -> bool:
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        logger.debug("Telegram not configured, skipping alert")
-        return False
-    try:
-        resp = await _client.post(
-            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-            json={
-                "chat_id": TELEGRAM_CHAT_ID,
-                "text": message,
-                "parse_mode": "HTML",
-            },
-        )
-        if resp.status_code == 200:
-            return True
-        logger.warning("Telegram send failed: %d %s", resp.status_code, resp.text[:200])
-        return False
-    except (httpx.HTTPError, httpx.TimeoutException) as e:
-        logger.error("Telegram network error: %s", e)
-        return False
-    except Exception as e:
-        logger.error("Telegram unexpected error: %s", e)
-        return False
 
 
 async def send_discord_embed(embeds: list[dict]) -> bool:
@@ -72,20 +47,10 @@ async def alert_signal(
     risk: dict | None = None,
     bull_case: str = "", bear_case: str = "", openclaw_risk: str = "",
 ) -> None:
-    """Send signal alert to Telegram and Discord #signaux-agent."""
+    """Send signal alert to Discord #signaux-agent."""
     emoji = {"BUY": "🟢", "SELL": "🔴", "HOLD": "⚠️"}.get(verdict, "❓")
     color = {"BUY": COLOR_BUY, "SELL": COLOR_SELL, "HOLD": COLOR_HOLD}.get(verdict, COLOR_INFO)
 
-    # --- Telegram (HTML) ---
-    tg_msg = (
-        f"{emoji} <b>SIGNAL {verdict}</b> — {ticker}\n\n"
-        f"  Score: <b>{score}/5</b> | Confiance: {confidence}%\n"
-        f"  Prix: ${price:.2f}\n"
-        f"  {summary}"
-    )
-    await send_telegram(tg_msg)
-
-    # --- Discord (rich embed) ---
     filter_lines = []
     if filters:
         for fname, passed in filters.items():
@@ -368,9 +333,7 @@ async def alert_scan_summary(market: str, results: list[dict], openclaw_verdicts
 
 
 async def alert_daily_summary(summary: str) -> None:
-    """Send end-of-day summary to Telegram and Discord."""
-    await send_telegram(f"📊 <b>RESUME JOURNALIER</b>\n\n{summary}")
-
+    """Send end-of-day summary to Discord."""
     embed = {
         "title": "📊 Résumé Journalier",
         "description": summary[:4096],
