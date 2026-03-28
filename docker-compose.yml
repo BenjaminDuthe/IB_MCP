@@ -106,10 +106,11 @@ services:
       - MCP_PORT=${MCP_SENTIMENT_PORT}
       - MCP_SENTIMENT_INTERNAL_URL=http://mcp_sentiment:${MCP_SENTIMENT_PORT}
       - MONGODB_URI=${MONGODB_URI}
+      - GROK_API_KEY=${GROK_API_KEY}
     deploy:
       resources:
         limits:
-          memory: 192M
+          memory: 256M
           cpus: '0.5'
         reservations:
           memory: 128M

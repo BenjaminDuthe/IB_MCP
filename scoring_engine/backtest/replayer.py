@@ -19,7 +19,7 @@ from scoring_engine.config import INFLUXDB_URL, INFLUXDB_DATABASE, INFLUXDB_USER
 
 logger = logging.getLogger(__name__)
 
-_client = httpx.AsyncClient(timeout=30.0)
+_client = httpx.AsyncClient(timeout=60.0)
 
 
 async def _query(q: str) -> list[dict]:

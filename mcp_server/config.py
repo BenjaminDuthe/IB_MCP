@@ -40,6 +40,11 @@ except ValueError:
 
 BASE_URL = f"{GATEWAY_INTERNAL_BASE_URL}:{GATEWAY_PORT}{GATEWAY_ENDPOINT}"
 
+# NOTE: All routers use httpx.AsyncClient(verify=False) when calling BASE_URL.
+# This is intentional — the IB Client Portal Gateway uses a self-signed certificate.
+# The gateway runs in a sibling Docker container on the same bridge network (mcp_net),
+# so MITM risk is negligible. Do NOT change to verify=True without importing the IB CA cert.
+
 # Create FastAPI object description based on filters
 base_description = """
 A comprehensive FastAPI wrapper for the Interactive Brokers Web API. 

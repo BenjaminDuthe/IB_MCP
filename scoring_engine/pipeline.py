@@ -66,6 +66,24 @@ async def _fetch(url: str, label: str) -> dict | None:
     return None
 
 
+async def _call_grok_contextual(ticker: str, briefing: dict) -> dict | None:
+    """Call Grok X contextual endpoint with full analysis briefing."""
+    try:
+        resp = await _client.post(
+            f"{SENTIMENT_URL}/sentiment/grok-x-contextual/{ticker}",
+            json=briefing,
+            timeout=35.0,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("sentiment_score") is not None:
+                return data
+        logger.warning("Grok contextual %s: HTTP %d", ticker, resp.status_code)
+    except Exception as e:
+        logger.error("Grok contextual failed for %s: %s", ticker, e)
+    return None
+
+
 async def _fetch_macro_overview() -> dict:
     macro, sectors = await asyncio.gather(
         _fetch(f"{MARKET_DATA_URL}/stock/market-overview", "macro"),
@@ -82,19 +100,34 @@ async def scan_ticker(ticker: str, macro_context: dict | None = None) -> dict:
 
     # Fetch all data in parallel
     await _init_agents()
-    technicals, sentiment, fundamentals, analyst_data = await asyncio.gather(
+    if not macro_context:
+        macro_context = await _fetch_macro_overview()
+    technicals, sentiment, fundamentals, analyst_data, insider_data, options_data = await asyncio.gather(
         _fetch(f"{MARKET_DATA_URL}/stock/technicals/{ticker}", f"technicals/{ticker}"),
         _fetch(f"{SENTIMENT_URL}/sentiment/combined/{ticker}", f"sentiment/{ticker}"),
         _fetch(f"{MARKET_DATA_URL}/stock/fundamentals/{ticker}", f"fundamentals/{ticker}"),
         _fetch(f"{MARKET_DATA_URL}/stock/analyst/{ticker}", f"analyst/{ticker}"),
+        _fetch(f"{SENTIMENT_URL}/sentiment/insider/{ticker}", f"insider/{ticker}"),
+        _fetch(f"{SENTIMENT_URL}/sentiment/options/{ticker}", f"options/{ticker}"),
     )
 
     if not technicals:
         result["error"] = "technicals_unavailable"
         return result
 
-    # Binary score (5 filters)
-    score_data = compute_score(ticker, technicals)
+    # Extract VIX from macro context for regime-adjusted scoring
+    vix = None
+    if macro_context:
+        macro_markets = (macro_context.get("macro") or {}).get("markets", [])
+        if isinstance(macro_markets, list):
+            for item in macro_markets:
+                if "vix" in (item.get("name", "")).lower() or item.get("symbol") == "^VIX":
+                    vix = item.get("price")
+                    break
+
+    # V4 score with regime-adjusted win rates + insider + options
+    score_data = compute_score(ticker, technicals, vix=vix,
+                               insider_data=insider_data, options_data=options_data)
     result["score"] = score_data
 
     # 4 analyst agents (factual reports, no verdict)
@@ -104,7 +137,36 @@ async def scan_ticker(ticker: str, macro_context: dict | None = None) -> dict:
         _macro_agent.analyze(ticker, macro_context or {}),
         _sentiment_agent.analyze(ticker, {"sentiment": sentiment}),
     )
+
+    # Grok X contextual — only if high fear + US ticker
+    grok_report = None
+    fg_raw = ((sentiment or {}).get("macro_sentiment") or {}).get("fear_greed_raw", 50)
+    is_us = not any(ticker.endswith(s) for s in (".PA", ".DE", ".AS", ".SW", ".L"))
+    if fg_raw is not None and fg_raw < 30 and is_us:
+        fund_metrics = (fundamentals or {})
+        briefing = {
+            "price": technicals.get("price"),
+            "vix": vix,
+            "fear_greed_raw": fg_raw,
+            "regime": score_data.get("regime", "unknown"),
+            "technical_score": score_data.get("score"),
+            "rsi_14": technicals.get("rsi_14"),
+            "trend_5d": technicals.get("trend_5d"),
+            "macd_signal": (technicals.get("macd") or {}).get("signal_type", "?"),
+            "fundamental_score": reports[1].score if len(reports) > 1 else "?",
+            "forward_pe": fund_metrics.get("forward_pe"),
+            "revenue_growth": fund_metrics.get("revenue_growth"),
+            "analyst_target": (analyst_data or {}).get("target_mean"),
+            "sentiment_score": (sentiment or {}).get("unified_score"),
+            "sources_used": (sentiment or {}).get("sources_used", []),
+            "active_signals": [s["name"] for s in score_data.get("active_signals", [])],
+            "watch_signals": [s["name"] for s in score_data.get("watch_signals", [])],
+        }
+        grok_report = await _call_grok_contextual(ticker, briefing)
+
     result["analyst_reports"] = [r.to_dict() for r in reports]
+    if grok_report:
+        result["grok_report"] = grok_report
 
     # Placeholder LLM (will be overridden by OpenClaw in scan_tickers)
     result["llm"] = {"verdict": "HOLD", "confidence": 0, "summary": "En attente de décision OpenClaw"}
@@ -167,20 +229,20 @@ async def scan_tickers(tickers: list[str]) -> dict:
     # Risk gate + signal detection
     for r in results:
         s = r.get("score", {})
-        l = r.get("llm", {})
-        if l.get("verdict") == "BUY" and l.get("confidence", 0) >= 60:
+        llm_data = r.get("llm", {})
+        if llm_data.get("verdict") == "BUY" and llm_data.get("confidence", 0) >= 60:
             if RISK_SIZING_ENABLED:
                 from scoring_engine.risk import enhanced_risk_check
-                risk_result = await enhanced_risk_check(r.get("ticker", ""), s, l)
+                risk_result = await enhanced_risk_check(r.get("ticker", ""), s, llm_data)
                 r["risk"] = risk_result
                 if not risk_result.get("approved", True):
-                    l["verdict"] = "HOLD"
-                    l["summary"] += f" [Risk: {risk_result.get('reason', '')}]"
-            if l.get("verdict") == "BUY":
+                    llm_data["verdict"] = "HOLD"
+                    llm_data["summary"] += f" [Risk: {risk_result.get('reason', '')}]"
+            if llm_data.get("verdict") == "BUY":
                 signals += 1
                 r["signal_sent"] = True
-                await write_signal(r["ticker"], "BUY", l["confidence"], s.get("price", 0), s.get("score", 0), l["summary"])
-                await write_scoring(r["ticker"], s.get("market", ""), s, l)
+                await write_signal(r["ticker"], "BUY", llm_data["confidence"], s.get("price", 0), s.get("score", 0), llm_data["summary"])
+                await write_scoring(r["ticker"], s.get("market", ""), s, llm_data)
 
     duration = time.time() - start
     await write_pipeline_status("scoring_v2", duration, len(tickers), signals, errors)
@@ -237,9 +299,9 @@ async def generate_daily_summary() -> str:
             lines.append(f"❌ {r['ticker']}: {r['error']}")
             continue
         s = r["score"]
-        l = r.get("llm", {})
-        emoji = "🟢" if l.get("verdict") == "BUY" else ("🔴" if l.get("verdict") == "SELL" else "🟡")
-        line = f"{emoji} {s['ticker']}: {s['score']}/5 — {l.get('verdict', '?')} ({l.get('confidence', 0)}%) ${s['price']:.2f}"
+        llm_data = r.get("llm", {})
+        emoji = "🟢" if llm_data.get("verdict") == "BUY" else ("🔴" if llm_data.get("verdict") == "SELL" else "🟡")
+        line = f"{emoji} {s['ticker']}: {s['score']}/5 — {llm_data.get('verdict', '?')} ({llm_data.get('confidence', 0)}%) ${s['price']:.2f}"
         if r.get("openclaw_risk"):
             line += f" ⚠️{r['openclaw_risk'][:50]}"
         lines.append(line)

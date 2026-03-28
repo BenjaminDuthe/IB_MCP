@@ -7,4 +7,6 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "httpx>=0.28",
     "apscheduler>=3.11",
+    "fastmcp==2.10.3",
+    "pydantic>=2.11,<2.12",
 ]

@@ -9,6 +9,7 @@ Usage:
 
 import argparse
 import asyncio
+import os
 import logging
 import sys
 import time
@@ -24,10 +25,10 @@ logger = logging.getLogger(__name__)
 
 # --- Configuration ---
 
-INFLUXDB_URL = "http://192.168.1.123:8086"
-INFLUXDB_DB = "trading"
-INFLUXDB_USER = "trading_writer"
-INFLUXDB_PASSWORD = "tw_s3cur3_2026"
+INFLUXDB_URL = os.environ.get("INFLUXDB_URL", "http://192.168.1.123:8086")
+INFLUXDB_DB = os.environ.get("INFLUXDB_DATABASE", "trading")
+INFLUXDB_USER = os.environ.get("INFLUXDB_USER", "trading_writer")
+INFLUXDB_PASSWORD = os.environ.get("INFLUXDB_PASSWORD", "")
 
 WATCHLIST = {
     "NVDA": "US", "MSFT": "US", "GOOGL": "US", "AMZN": "US",

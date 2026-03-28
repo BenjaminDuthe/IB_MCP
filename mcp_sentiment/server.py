@@ -13,9 +13,20 @@ from mcp_sentiment.tools.finnhub_sentiment import router as finnhub_sentiment_ro
 from mcp_sentiment.tools.fear_greed import router as fear_greed_router
 from mcp_sentiment.tools.alphavantage import router as alphavantage_router
 from mcp_sentiment.tools.rss_sentiment import router as rss_sentiment_router
+from mcp_sentiment.tools.yfinance_news import router as yfinance_news_router
+from mcp_sentiment.tools.google_trends import router as google_trends_router
+from mcp_sentiment.tools.earnings_proximity import router as earnings_router
+from mcp_sentiment.tools.grok_x_sentiment import router as grok_x_router
+from mcp_sentiment.tools.insider_signal import router as insider_router
+from mcp_sentiment.tools.options_sentiment import router as options_router
+
+_ALL_ROUTERS = [reddit_router, stocktwits_router, combined_router, finnhub_sentiment_router,
+                fear_greed_router, alphavantage_router, rss_sentiment_router,
+                yfinance_news_router, google_trends_router, earnings_router, grok_x_router,
+                insider_router, options_router]
 
 _tool_app = FastAPI()
-for r in [reddit_router, stocktwits_router, combined_router, finnhub_sentiment_router, fear_greed_router, alphavantage_router, rss_sentiment_router]:
+for r in _ALL_ROUTERS:
     _tool_app.include_router(r)
 
 mcp = FastMCP.from_fastapi(app=_tool_app)
@@ -43,7 +54,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-for r in [reddit_router, stocktwits_router, combined_router, finnhub_sentiment_router, fear_greed_router, alphavantage_router, rss_sentiment_router]:
+for r in _ALL_ROUTERS:
     app.include_router(r)
 
 

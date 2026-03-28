@@ -1,11 +1,30 @@
-"""Macro Analyst — market regime detection + sector rotation."""
+"""Macro Analyst — market regime detection + sector rotation + Ollama narrative."""
 
 import logging
 
-from scoring_engine.agents.base import AnalystAgent, AnalystReport
+from scoring_engine.agents.base import AnalystAgent, AnalystReport, OllamaClient
 from scoring_engine.config import TICKER_SECTORS
 
 logger = logging.getLogger(__name__)
+
+_ollama = OllamaClient()
+
+SYSTEM = "Tu es un analyste macro-economique. Redige un rapport en francais, 3-5 lignes maximum. Pas de JSON, pas de markdown, pas de gras, pas de titres — juste du texte brut. Base-toi UNIQUEMENT sur les donnees fournies. Si une donnee est '?' ou manquante, dis-le clairement, n'invente rien."
+
+
+# Map config sector names → API sector-performance names (exact lowercase)
+_SECTOR_MAP = {
+    "tech": "technology",
+    "consumer": "consumer",           # matches both Consumer Discretionary & Staples
+    "healthcare": "healthcare",
+    "finance": "financials",
+    "energy": "energy",
+    "industrials": "industrials",
+    "materials": "materials",
+    "aerospace": "industrials",       # No aerospace ETF, closest is XLI
+    "luxury": "consumer discretionary",
+    "telecom": "communication",
+}
 
 
 def _detect_regime(vix: float | None) -> str:
@@ -16,6 +35,19 @@ def _detect_regime(vix: float | None) -> str:
     if vix < 25:
         return "neutral"
     return "bearish"
+
+
+def _format_prompt(ticker: str, regime: str, vix, sp500_change, treasury_10y, dxy, ticker_sector: str, sector_rank, total_sectors: int) -> str:
+    return (
+        f"Ticker: {ticker} | Secteur: {ticker_sector}\n"
+        f"VIX: {vix if vix is not None else '?'} | Regime: {regime}\n"
+        f"S&P500 variation jour: {f'{sp500_change:+.2f}%' if sp500_change is not None else '?'}\n"
+        f"Taux 10 ans US: {f'{treasury_10y:.3f}%' if treasury_10y is not None else '?'} | "
+        f"Dollar (DXY): {f'{dxy:.1f}' if dxy is not None else '?'}\n"
+        f"Rang secteur: {f'{sector_rank}/{total_sectors}' if sector_rank else '?'}\n\n"
+        f"Redige 3-5 lignes: contexte macro actuel, impact sur le secteur {ticker_sector}, "
+        f"et ce que cela implique pour les actions de ce secteur."
+    )
 
 
 class MacroAnalyst(AnalystAgent):
@@ -37,19 +69,15 @@ class MacroAnalyst(AnalystAgent):
 
         for item in markets if isinstance(markets, list) else []:
             name = item.get("name", "").lower()
-            if "vix" in name:
+            sym = item.get("symbol", "").upper()
+            if "vix" in name or sym == "^VIX":
                 vix = item.get("price") or item.get("value")
-            elif "s&p" in name or "sp500" in name:
-                sp500_change = item.get("change_pct")
-            elif "10" in name and "year" in name.lower():
+            elif "s&p" in name or sym == "^GSPC":
+                sp500_change = item.get("change_percent")
+            elif ("10y" in name or "10 year" in name or sym == "^TNX"):
                 treasury_10y = item.get("price") or item.get("value")
-
-        # Handle dict format
-        if isinstance(markets, dict):
-            vix_data = markets.get("VIX") or markets.get("vix") or {}
-            vix = vix_data.get("price") or vix_data.get("value") if isinstance(vix_data, dict) else None
-            sp_data = markets.get("S&P 500") or markets.get("sp500") or {}
-            sp500_change = sp_data.get("change_pct") if isinstance(sp_data, dict) else None
+            elif "dollar" in name or sym == "DX-Y.NYB":
+                dxy = item.get("price") or item.get("value")
 
         regime = _detect_regime(vix)
 
@@ -59,12 +87,14 @@ class MacroAnalyst(AnalystAgent):
 
         # Sector rotation bonus/malus
         ticker_sector = TICKER_SECTORS.get(ticker, "unknown")
+        search_sector = _SECTOR_MAP.get(ticker_sector, ticker_sector).lower()
         sector_data = sectors.get("sectors", [])
         sector_rank = None
+        total_sectors = len(sector_data) if sector_data else 0
         if sector_data and isinstance(sector_data, list):
             for i, s in enumerate(sector_data):
                 s_name = (s.get("sector", "") or s.get("name", "")).lower()
-                if ticker_sector.lower() in s_name:
+                if search_sector in s_name:
                     sector_rank = i + 1
                     total = len(sector_data)
                     # Top 3 = bonus, bottom 3 = malus
@@ -81,17 +111,29 @@ class MacroAnalyst(AnalystAgent):
         if sector_rank is not None:
             reasons.append(f"Secteur {ticker_sector} rang {sector_rank}/{len(sector_data)}")
 
+        # Ollama narrative report
+        result = await _ollama.generate(
+            system_prompt=SYSTEM,
+            user_prompt=_format_prompt(ticker, regime, vix, sp500_change, treasury_10y, dxy, ticker_sector, sector_rank, total_sectors),
+            max_tokens=200,
+            temperature=0.3,
+        )
+        narrative = result.get("raw", result.get("summary", ""))
+        if not narrative or result.get("_error"):
+            narrative = ", ".join(reasons)
+
         return AnalystReport(
             agent_name=self.name,
             ticker=ticker,
             score=round(score, 2),
             confidence=60 if regime != "unknown" else 20,
-            summary=", ".join(reasons),
+            summary=narrative,
             metrics={
                 "vix": vix,
                 "market_regime": regime,
                 "sp500_change_pct": sp500_change,
                 "treasury_10y": treasury_10y,
+                "dxy": dxy,
                 "ticker_sector": ticker_sector,
                 "sector_rank": sector_rank,
             },

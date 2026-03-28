@@ -1,15 +1,45 @@
-"""Fundamental Analyst — rules-based scoring from yfinance financials."""
+"""Fundamental Analyst — rules-based scoring + Ollama narrative report."""
 
 import logging
 
 import httpx
 
-from scoring_engine.agents.base import AnalystAgent, AnalystReport
+from scoring_engine.agents.base import AnalystAgent, AnalystReport, OllamaClient
 from scoring_engine.config import MARKET_DATA_URL
 
 logger = logging.getLogger(__name__)
 
 _client = httpx.AsyncClient(timeout=15.0)
+_ollama = OllamaClient()
+
+SYSTEM = "Tu es un analyste fondamental. Redige un rapport structure en francais, 5-8 lignes maximum. Pas de JSON, pas de markdown, pas de gras, pas de titres — juste du texte brut. Base-toi UNIQUEMENT sur les donnees fournies, n'invente aucun chiffre."
+
+
+def _format_prompt(ticker: str, fundamentals: dict, analyst: dict, score: float) -> str:
+    current = analyst.get("current_price") or fundamentals.get("current_price", 0)
+    target = analyst.get("target_mean")
+    upside = round((target - current) / current * 100, 1) if target and current else None
+
+    fpe = fundamentals.get("forward_pe")
+    rg = fundamentals.get("revenue_growth")
+    margin = fundamentals.get("profit_margin")
+    de = fundamentals.get("debt_to_equity")
+    roe = fundamentals.get("return_on_equity")
+
+    return (
+        f"Ticker: {ticker} | Prix: ${current or '?'}\n"
+        f"Score fondamental: {score:+.2f}\n"
+        f"P/E forward: {f'{fpe:.1f}' if fpe else '?'} | "
+        f"Croissance CA: {f'{rg*100:.0f}%' if rg is not None else '?'} | "
+        f"Marge beneficiaire: {f'{margin*100:.0f}%' if margin is not None else '?'}\n"
+        f"Dette/equity: {f'{de:.0f}%' if de is not None else '?'} | "
+        f"ROE: {f'{roe*100:.0f}%' if roe is not None else '?'}\n"
+        f"Target analystes: ${target or '?'} ({f'+{upside:.0f}%' if upside else '?'})\n\n"
+        f"Redige un rapport couvrant: 1) Valorisation (le prix est-il justifie par les benefices ?) "
+        f"2) Croissance (le chiffre d'affaires progresse-t-il ?) "
+        f"3) Sante financiere (dette gerable ? entreprise rentable ?) "
+        f"4) Ce que pensent les analystes de Wall Street"
+    )
 
 
 class FundamentalAnalyst(AnalystAgent):
@@ -91,12 +121,23 @@ class FundamentalAnalyst(AnalystAgent):
 
         score = max(-1.0, min(1.0, score))
 
+        # Ollama narrative report
+        result = await _ollama.generate(
+            system_prompt=SYSTEM,
+            user_prompt=_format_prompt(ticker, fundamentals, analyst, score),
+            max_tokens=300,
+            temperature=0.3,
+        )
+        narrative = result.get("raw", result.get("summary", ""))
+        if not narrative or result.get("_error"):
+            narrative = "; ".join(reasons[:3]) if reasons else "Rapport fondamental indisponible"
+
         return AnalystReport(
             agent_name=self.name,
             ticker=ticker,
             score=round(score, 2),
             confidence=min(100, int(abs(score) * 100)),
-            summary="; ".join(reasons[:3]) if reasons else "Donnees insuffisantes",
+            summary=narrative,
             metrics={
                 "forward_pe": fpe,
                 "revenue_growth": rg,

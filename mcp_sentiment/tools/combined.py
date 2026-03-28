@@ -15,7 +15,14 @@ SOURCE_WEIGHTS = {
     "reddit": 3.0,       # scaled by volume_factor
     "stocktwits": 2.5,   # scaled by volume_factor
     "rss": 3.0,          # RSS article-based sentiment (EU + US)
+    "yfinance_news": 3.5, # ticker-specific, always available
+    "google_trends": 2.0,  # spike detection, complementary
+    "grok_x": 5.0,        # highest weight — only activated in high fear + US tickers
+    "insider": 4.0,        # insiders buying = very reliable signal
+    "options": 3.0,        # put/call ratio contrarian signal
 }
+
+_EU_SUFFIXES = (".PA", ".DE", ".AS", ".SW", ".L")
 
 FEAR_GREED_BLEND = 0.20  # 20% macro blend
 
@@ -34,7 +41,7 @@ async def get_combined_sentiment(ticker: str):
         except Exception as e:
             return source, {"error": str(e)}
 
-    # Fetch all 6 sources in parallel
+    # Fetch all 9 sources in parallel
     fetches = await asyncio.gather(
         _fetch("reddit", f"{base_url}/sentiment/reddit/{ticker}"),
         _fetch("stocktwits", f"{base_url}/sentiment/stocktwits/{ticker}"),
@@ -42,6 +49,11 @@ async def get_combined_sentiment(ticker: str):
         _fetch("alphavantage", f"{base_url}/sentiment/alphavantage/{ticker}"),
         _fetch("fear_greed", f"{base_url}/sentiment/feargreed"),
         _fetch("rss", f"{base_url}/sentiment/rss/{ticker}"),
+        _fetch("yfinance_news", f"{base_url}/sentiment/yfinance/{ticker}"),
+        _fetch("google_trends", f"{base_url}/sentiment/trends/{ticker}"),
+        _fetch("earnings", f"{base_url}/sentiment/earnings/{ticker}"),
+        _fetch("insider", f"{base_url}/sentiment/insider/{ticker}"),
+        _fetch("options", f"{base_url}/sentiment/options/{ticker}"),
     )
     results = dict(fetches)
 
@@ -89,6 +101,27 @@ async def get_combined_sentiment(ticker: str):
         ticker_weights.append(SOURCE_WEIGHTS["rss"] * rss_volume)
         sources_used.append("rss")
 
+    # yfinance News (weight 3.5 × volume_factor)
+    yf_news = results.get("yfinance_news", {})
+    if yf_news.get("sentiment_score") is not None and "error" not in yf_news:
+        yf_volume = min(yf_news.get("article_count", 0), 10) / 10
+        ticker_scores.append(yf_news["sentiment_score"])
+        ticker_weights.append(SOURCE_WEIGHTS["yfinance_news"] * max(yf_volume, 0.3))
+        sources_used.append("yfinance_news")
+
+    # Google Trends (weight 2.0, only if spike detected)
+    trends = results.get("google_trends", {})
+    if trends.get("sentiment_score") is not None and "error" not in trends:
+        if trends.get("spike"):
+            ticker_scores.append(trends["sentiment_score"])
+            ticker_weights.append(SOURCE_WEIGHTS["google_trends"])
+            sources_used.append("google_trends")
+
+    # Earnings proximity (modifier, not a score source)
+    earnings = results.get("earnings", {})
+    earnings_imminent = earnings.get("earnings_imminent", False)
+    confidence_modifier = earnings.get("confidence_modifier", 1.0)
+
     # --- Macro source: Fear & Greed ---
     fear_greed = results.get("fear_greed", {})
     fg_score = None
@@ -102,9 +135,26 @@ async def get_combined_sentiment(ticker: str):
             "fear_greed_label": fear_greed.get("label"),
         }
 
+    # Insider signal (weight 4.0 — insiders have the information edge)
+    insider = results.get("insider", {})
+    if insider.get("sentiment_score") is not None and "error" not in insider:
+        ticker_scores.append(insider["sentiment_score"])
+        ticker_weights.append(SOURCE_WEIGHTS["insider"])
+        sources_used.append("insider")
+
+    # Options put/call ratio (weight 3.0 — contrarian signal from options market)
+    options = results.get("options", {})
+    if options.get("sentiment_score") is not None and "error" not in options and "skipped" not in options:
+        ticker_scores.append(options["sentiment_score"])
+        ticker_weights.append(SOURCE_WEIGHTS["options"])
+        sources_used.append("options")
+
+    # --- Grok X is now called from pipeline.py with full briefing context ---
+
     # --- Compute unified score ---
-    if ticker_scores and sum(ticker_weights) > 0:
-        ticker_unified = sum(s * w for s, w in zip(ticker_scores, ticker_weights)) / sum(ticker_weights)
+    total_weight = sum(ticker_weights)
+    if ticker_scores and total_weight > 0:
+        ticker_unified = sum(s * w for s, w in zip(ticker_scores, ticker_weights)) / total_weight
 
         if fg_score is not None:
             unified_score = round((1 - FEAR_GREED_BLEND) * ticker_unified + FEAR_GREED_BLEND * fg_score, 3)
@@ -127,6 +177,8 @@ async def get_combined_sentiment(ticker: str):
         "unified_label": unified_label,
         "source_count": len(sources_used),
         "sources_used": sources_used,
+        "earnings_imminent": earnings_imminent,
+        "confidence_modifier": confidence_modifier,
         "sources": results,
     }
     if macro_sentiment:

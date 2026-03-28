@@ -71,25 +71,28 @@ US_EXCHANGES = ["NYSE", "NASDAQ"]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- EU: pre-scan at 8:45, deliver at 9:00 ---
+    # ============================================
+    # 7 JOBS (lun-ven) :
+    #   1. EU ouverture    : prescan 8:45 → deliver 9:00
+    #   2. US ouverture    : prescan 15:15 → deliver 15:30
+    #   3. EU fermeture    : scan 17:30 (fermeture 17:35)
+    #   4. US fermeture    : scan 22:00 (fermeture 22:00 CET)
+    #   5. Résumé matin    : 9:00 (avec le deliver EU)
+    #   6. Performance     : vendredi 19:00
+    #   7. Drift check     : vendredi 19:15
+    # ============================================
+
+    # --- EU ouverture : prescan 8:45, deliver + résumé 9:00 ---
     scheduler.add_job(
         _prescan_exchanges, CronTrigger(day_of_week="mon-fri", hour=8, minute=45, timezone="Europe/Paris"),
-        args=[EU_EXCHANGES, "9h"], id="prescan_eu_9h",
+        args=[EU_EXCHANGES, "9h"], id="prescan_eu_open",
     )
     scheduler.add_job(
         _deliver_results, CronTrigger(day_of_week="mon-fri", hour=9, minute=0, timezone="Europe/Paris"),
-        args=[EU_EXCHANGES, "9h"], id="deliver_eu_9h",
+        args=[EU_EXCHANGES, "9h"], id="deliver_eu_open",
     )
 
-    # --- EU rescans at 12:00 and 16:00 (scan + send immediately) ---
-    for hour in [12, 16]:
-        for exchange in EU_EXCHANGES:
-            scheduler.add_job(
-                _scan_and_send, CronTrigger(day_of_week="mon-fri", hour=hour, minute=0, timezone="Europe/Paris"),
-                args=[exchange], id=f"scan_{exchange.lower()}_{hour}h",
-            )
-
-    # --- US: pre-scan at 15:15, deliver at 15:30 ---
+    # --- US ouverture : prescan 15:15, deliver 15:30 ---
     scheduler.add_job(
         _prescan_exchanges, CronTrigger(day_of_week="mon-fri", hour=15, minute=15, timezone="Europe/Paris"),
         args=[US_EXCHANGES, "15h30"], id="prescan_us_open",
@@ -99,20 +102,27 @@ async def lifespan(app: FastAPI):
         args=[US_EXCHANGES, "15h30"], id="deliver_us_open",
     )
 
-    # --- US rescans at 18:00 and 20:30 (scan + send immediately) ---
-    for hour, minute in [(18, 0), (20, 30)]:
-        for exchange in US_EXCHANGES:
-            scheduler.add_job(
-                _scan_and_send, CronTrigger(day_of_week="mon-fri", hour=hour, minute=minute, timezone="Europe/Paris"),
-                args=[exchange], id=f"scan_{exchange.lower()}_{hour}h{minute:02d}",
-            )
-
-    # Daily summary: Mon-Fri 22:30 CET
+    # --- EU fermeture : scan toutes bourses EU à 17:30 ---
     scheduler.add_job(
-        job_daily_summary, CronTrigger(day_of_week="mon-fri", hour=22, minute=30, timezone="Europe/Paris"),
-        id="daily_summary",
+        _prescan_exchanges, CronTrigger(day_of_week="mon-fri", hour=17, minute=15, timezone="Europe/Paris"),
+        args=[EU_EXCHANGES, "17h30"], id="prescan_eu_close",
     )
-    # Weekly performance report: Friday 22:45 CET
+    scheduler.add_job(
+        _deliver_results, CronTrigger(day_of_week="mon-fri", hour=17, minute=30, timezone="Europe/Paris"),
+        args=[EU_EXCHANGES, "17h30"], id="deliver_eu_close",
+    )
+
+    # --- US fermeture : scan NYSE+NASDAQ à 22:00 ---
+    scheduler.add_job(
+        _prescan_exchanges, CronTrigger(day_of_week="mon-fri", hour=21, minute=45, timezone="Europe/Paris"),
+        args=[US_EXCHANGES, "22h"], id="prescan_us_close",
+    )
+    scheduler.add_job(
+        _deliver_results, CronTrigger(day_of_week="mon-fri", hour=22, minute=0, timezone="Europe/Paris"),
+        args=[US_EXCHANGES, "22h"], id="deliver_us_close",
+    )
+
+    # --- Performance hebdo + drift : vendredi 19:00 ---
     if FEEDBACK_ENABLED:
         async def job_weekly_perf():
             from scoring_engine.feedback.performance import generate_performance_report
@@ -125,17 +135,11 @@ async def lifespan(app: FastAPI):
             await check_drift()
 
         scheduler.add_job(
-            job_weekly_perf, CronTrigger(
-                day_of_week="fri", hour=22, minute=45,
-                timezone="Europe/Paris",
-            ),
+            job_weekly_perf, CronTrigger(day_of_week="fri", hour=19, minute=0, timezone="Europe/Paris"),
             id="weekly_perf",
         )
         scheduler.add_job(
-            job_drift_check, CronTrigger(
-                day_of_week="mon-fri", hour=23, minute=0,
-                timezone="Europe/Paris",
-            ),
+            job_drift_check, CronTrigger(day_of_week="fri", hour=19, minute=15, timezone="Europe/Paris"),
             id="drift_check",
         )
 
@@ -145,7 +149,82 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
 
-app = FastAPI(title="Scoring Engine", version="0.1.0", lifespan=lifespan)
+# MCP layer — expose scoring tools for OpenClaw
+from fastmcp import FastMCP
+
+mcp = FastMCP("Scoring Engine MCP",
+              instructions="Trading analysis engine: scan tickers, get signals, check risk, view calibration.")
+
+
+@mcp.tool()
+async def scan_ticker_analysis(ticker: str) -> dict:
+    """Analyse complète d'un ticker: 4 rapports analystes (technique, fondamental, macro, sentiment) + score V4."""
+    result = await scan_ticker(ticker.upper())
+    result.pop("llm", None)
+    result["decision_note"] = "Les rapports ci-dessus sont les analyses brutes. C'est a toi de prendre la decision d'investissement."
+    return result
+
+
+@mcp.tool()
+async def analyze_ticker_with_openclaw(ticker: str) -> dict:
+    """Analyse d'un ticker avec décision OpenClaw (BUY/HOLD/SELL + conviction)."""
+    from scoring_engine.pipeline import scan_tickers
+    result = await scan_tickers([ticker.upper()])
+    if result["results"]:
+        return result["results"][0]
+    return {"error": "no_result"}
+
+
+@mcp.tool()
+async def get_top_trading_signals(limit: int = 5) -> list:
+    """Retourne les meilleurs signaux d'achat actuels classés par OpenClaw."""
+    return await get_top_signals(limit)
+
+
+@mcp.tool()
+async def get_portfolio_risk() -> dict:
+    """État du risque: signaux d'achat actifs et exposition sectorielle."""
+    from scoring_engine.risk.portfolio_risk import get_active_signals, TICKER_SECTORS
+    active = get_active_signals()
+    sectors = {}
+    for t in active:
+        s = TICKER_SECTORS.get(t, "unknown")
+        sectors[s] = sectors.get(s, 0) + 1
+    return {"active_buy_signals": active, "sector_exposure": sectors}
+
+
+@mcp.tool()
+async def get_calibration_data() -> dict:
+    """Win rates backtestés par niveau de score (10 ans, 78 tickers). Source de vérité pour la conviction."""
+    from scoring_engine.backtest.calibration import load_calibration
+    return load_calibration()
+
+
+@mcp.tool()
+async def get_watchlist_info() -> dict:
+    """Liste des 78 tickers surveillés avec nom, pays, bourse, secteur."""
+    from scoring_engine.config import TICKERS
+    return {t: {"name": d["name"], "country": d["country"], "exchange": d["exchange"],
+                "sector": d["sector"], "desc": d["desc"]} for t, d in TICKERS.items()}
+
+
+_mcp_app = mcp.streamable_http_app()
+
+
+@asynccontextmanager
+async def combined_lifespan(the_app):
+    """Combine scheduler lifespan + MCP lifespan."""
+    async with _mcp_app.lifespan(the_app):
+        async with lifespan(the_app):
+            yield
+
+
+app = FastAPI(
+    title="Scoring Engine",
+    description="Trading agent V4: 78 tickers, 11 signals, 13 sentiment sources, Ollama 8B + Grok X + OpenClaw",
+    version="0.4.0",
+    lifespan=combined_lifespan,
+)
 
 
 @app.get("/health")
@@ -179,6 +258,13 @@ async def api_deep_analyze(ticker: str):
     if result["results"]:
         return result["results"][0]
     return {"error": "no_result"}
+
+
+@app.post("/api/scan-exchange/{exchange}")
+async def api_scan_exchange(exchange: str):
+    """Manually trigger a scan for a specific exchange (with Discord alert)."""
+    from scoring_engine.pipeline import scan_exchange
+    return await scan_exchange(exchange, send_discord=True)
 
 
 @app.get("/api/market-pulse")
@@ -269,6 +355,14 @@ async def api_v3_backtest():
     return await run_v3_backtest(list(WATCHLIST.keys()))
 
 
+@app.post("/api/backtest/v4")
+async def api_v4_backtest():
+    """V4: regime filter + signal combos + smart exits + walk-forward validation."""
+    from scoring_engine.backtest.strategies_v4 import run_v4_backtest
+    from scoring_engine.config import WATCHLIST
+    return await run_v4_backtest(list(WATCHLIST.keys()))
+
+
 @app.get("/api/backtest/calibration")
 async def api_get_calibration():
     """Get current calibration table (win rates per score level)."""
@@ -285,3 +379,7 @@ async def api_multi_factor_backtest():
                    "require_sma200": w["require_sma200"]}
               for t, w in WATCHLIST.items()}
     return await run_multi_factor_backtest(params)
+
+
+# --- MCP mount ---
+app.mount("/mcp", _mcp_app)

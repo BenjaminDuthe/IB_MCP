@@ -10,7 +10,9 @@ RUN pip install --no-cache-dir \
     httpx==0.28.* \
     apscheduler==3.11.* \
     numpy==2.2.* \
-    pandas==2.2.*
+    pandas==2.2.* \
+    fastmcp==2.10.3 \
+    "pydantic>=2.11,<2.12"
 
 COPY . /app/scoring_engine/
 

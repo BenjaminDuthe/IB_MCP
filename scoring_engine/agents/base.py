@@ -52,7 +52,7 @@ class OllamaClient:
                 },
             )
             resp.raise_for_status()
-            raw = resp.json().get("response", "").strip()
+            raw = (resp.json().get("response") or "").strip()
 
             # Try JSON parse
             text = raw

@@ -187,7 +187,7 @@ async def alert_scan_summary(market: str, results: list[dict], openclaw_verdicts
         "description": "\n".join(lines) + market_comment + alerts_text,
         "color": COLOR_INFO,
         "timestamp": datetime.utcnow().isoformat(),
-        "footer": {"text": "Trading Agent v2 | Classement par OpenClaw (Claude)"},
+        "footer": {"text": "Trading Agent v2 | Classement par OpenClaw (Claude & Grok)" if any(r.get("grok_report") for r in valid) else "Trading Agent v2 | Classement par OpenClaw (Claude)"},
     }
     await send_discord_embed([ranking_embed])
 

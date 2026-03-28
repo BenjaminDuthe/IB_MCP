@@ -11,7 +11,9 @@ logger = logging.getLogger(__name__)
 OPENCLAW_API_URL = os.environ.get("OPENCLAW_API_URL", "http://192.168.1.125:18789/v1/responses")
 OPENCLAW_TOKEN = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "")
 
-DECISION_PROMPT = """Tu es le comite d'investissement d'un fonds. Tu recois les rapports de 4 analystes (technique, fondamental, macro, sentiment) pour chaque ticker.
+DECISION_PROMPT = """Tu es le comite d'investissement d'un fonds. Tu recois les rapports de 4-5 analystes (technique, fondamental, macro, sentiment, et parfois GROK_X qui analyse le sentiment temps reel sur X/Twitter) pour chaque ticker.
+
+IMPORTANT sur GROK_X : quand present, ce rapport confronte notre analyse avec le sentiment reel des traders sur X. Si GROK_X indique "DIVERGENCE: contredit" avec "contrarian_signal: OUI", c'est un signal fort — les traders sur X voient quelque chose que nos indicateurs ne captent pas. Pese cette information dans ta decision.
 
 TON ROLE : peser le pour et le contre de chaque ticker comme un vrai comite d'investissement. Explique simplement, comme si tu parlais a quelqu'un qui debute en bourse.
 
@@ -112,10 +114,20 @@ async def get_openclaw_verdicts(ticker_reports: list[dict]) -> dict | None:
             for ws in watch_sigs:
                 lines.append(f"    👀 {ws['name']} — {ws['condition']}")
 
+        # Grok X divergence analysis (only present in high fear + US tickers)
+        grok = tr.get("grok_report")
+        if grok and grok.get("sentiment_score") is not None:
+            divergence = grok.get("divergence", "neutre")
+            divergence_detail = grok.get("divergence_detail", "")
+            grok_themes = ", ".join(grok.get("key_themes", []))
+            contrarian = "OUI" if grok.get("contrarian_signal") else "non"
+            lines.append(f"  [GROK_X] Score: {grok['sentiment_score']:+.2f} | DIVERGENCE: {divergence} — {divergence_detail}")
+            lines.append(f"    Themes X: {grok_themes} | Signal contrarian: {contrarian} | Qualite: {grok.get('signal_quality', '?')}")
+
         filters = score.get("filters", {})
         if filters:
-            f_str = " ".join(("Y" if v else "N") for v in filters.values())
-            lines.append(f"  Filtres: {f_str} ({score.get('score', 0)}/5)")
+            filters_status = " ".join(("Y" if v else "N") for v in filters.values())
+            lines.append(f"  Filtres: {filters_status} ({score.get('score', 0)}/5)")
 
         if llm.get("summary"):
             lines.append(f"  LLM: {llm['summary'][:100]}")

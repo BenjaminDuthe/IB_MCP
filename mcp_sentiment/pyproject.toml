@@ -1,7 +1,7 @@
 [project]
 name = "mcp-sentiment"
 version = "0.2.0"
-description = "MCP server for multi-source sentiment analysis (Finnhub, Alpha Vantage, Reddit, StockTwits, CNN Fear & Greed)"
+description = "MCP server for multi-source sentiment analysis (11 sources: Finnhub, Alpha Vantage, Reddit, StockTwits, CNN F&G, RSS, yfinance News, Google Trends, Earnings, Grok X, Combined)"
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp==2.10.3",
@@ -13,6 +13,9 @@ dependencies = [
     "pydantic>=2.11,<2.12",
     "finnhub-python>=2.4.20",
     "motor>=3.6.0",
+    "yfinance>=0.2.40",
+    "pytrends>=4.9.0",
+    "openai>=1.0",              # Compatible OpenAI SDK for xAI Grok API (grok_x_sentiment.py)
 ]
 
 [dependency-groups]
